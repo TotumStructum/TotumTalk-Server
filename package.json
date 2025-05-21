@@ -1,0 +1,30 @@
+{
+  "name": "totumtalk-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TotumStructum/TotumTalk-Server.git"
+  },
+  "author": "Volodymyr Korzhevskyi",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/TotumStructum/TotumTalk-Server/issues"
+  },
+  "homepage": "https://github.com/TotumStructum/TotumTalk-Server#readme",
+  "dependencies": {
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.0",
+    "xss": "^1.0.15"
+  }
+}
