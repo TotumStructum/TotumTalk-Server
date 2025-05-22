@@ -1,16 +1,16 @@
-const express = require("express"); //web framework for NodeJS
+const express = require("express");
 
-const morgan = require("morgan");
+const morgan = require("morgan"); // http logs
 
-const rateLimit = require("express-rate-limit");
+const rateLimit = require("express-rate-limit"); // request limiter
 
-const helmet = require("helmet");
+const helmet = require("helmet"); //xss protection
 
-const mongosanitize = require("express-mongo-sanitize");
+const mongosanitize = require("express-mongo-sanitize"); //sql injections protection
 
 const bodyParser = require("body-parser");
 
-const xss = require("xss");
+const xss = require("xss"); // xss protection
 
 const cors = require("cors");
 
