@@ -5,6 +5,8 @@ const otpGenerator = require("otp-generator");
 const { use } = require("react");
 const crypto = require("crypto");
 const { promisify } = require("util");
+const mailService = require("../services/mailer");
+const { text } = require("body-parser");
 
 const signToken = (userId) =>
   jwt.sign(
@@ -70,6 +72,12 @@ exports.sendOTP = async (req, res, next) => {
   });
 
   // TODO Send mail
+  mailService.sendEmail({
+    from: "totumstructum@gmail.com",
+    to: "example@gmail.com",
+    subject: "OTP for TAWK",
+    text: `Your OTP is ${new_otp}. This is valid for 10 mins.`,
+  });
 
   res.status(200).json({
     status: "success",

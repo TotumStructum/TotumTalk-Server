@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/TotumStructum/TotumTalk-Server#readme",
   "dependencies": {
+    "@sendgrid/mail": "^8.1.5",
     "bcryptjs": "^3.0.2",
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",

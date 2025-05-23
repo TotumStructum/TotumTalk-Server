@@ -1,5 +1,7 @@
 const express = require("express");
 
+const routes = require("./routes/index");
+
 const morgan = require("morgan"); // http logs
 
 const rateLimit = require("express-rate-limit"); // request limiter
@@ -51,5 +53,7 @@ const limiter = rateLimit({
 });
 
 app.use("/tawk", limiter);
+
+app.use(routes);
 
 module.exports = app;
