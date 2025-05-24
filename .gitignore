@@ -13,6 +13,7 @@ pnpm-debug.log*
 .env.production.local
 
 config.env
+nodemon.json
 
 # Logs
 logs

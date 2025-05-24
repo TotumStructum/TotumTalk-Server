@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema({
             /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
           );
       },
-      message: (props = `Email ${props.value} is invalid!`),
+      message: (props) => `Email (${props.value}) is invalid!`,
     },
   },
   password: {
@@ -54,7 +54,7 @@ const userSchema = new mongoose.Schema({
     default: false,
   },
   otp: {
-    type: Number,
+    type: String,
   },
   otp_expiry_time: {
     type: Date,
@@ -62,21 +62,25 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.pre("save", async function (next) {
-  //
-  if (!this.isModified("otp")) return next();
+  // Only run this function if password was actually modified
+  if (!this.isModified("otp") || !this.otp) return next();
 
-  //hash the otp with cost = 12 (optimal for production)
-  this.otp = await bcryptjs.hash(this.otp, 12);
+  // Hash the otp with cost of 12
+  this.otp = await bcrypt.hash(this.otp.toString(), 12);
+
+  console.log(this.otp.toString(), "FROM PRE SAVE HOOK");
 
   next();
 });
 
 userSchema.pre("save", async function (next) {
-  //
-  if (!this.isModified("password")) return next();
+  // Only run this function if password was actually modified
+  if (!this.isModified("password") || !this.password) return next();
 
-  //hash the password with cost = 12 (optimal for production)
-  this.password = await bcryptjs.hash(this.password, 12);
+  // Hash the password with cost of 12
+  this.password = await bcrypt.hash(this.password, 12);
+
+  //! Shift it to next hook // this.passwordChangedAt = Date.now() - 1000;
 
   next();
 });

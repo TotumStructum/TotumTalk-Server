@@ -8,7 +8,7 @@ const rateLimit = require("express-rate-limit"); // request limiter
 
 const helmet = require("helmet"); //xss protection
 
-const mongosanitize = require("express-mongo-sanitize"); //sql injections protection
+const mongoSanitize = require("mongo-sanitize");
 
 const bodyParser = require("body-parser");
 
@@ -24,7 +24,11 @@ app.use(
   })
 );
 
-app.use(mongosanitize());
+app.use((req, res, next) => {
+  req.body = mongoSanitize(req.body);
+  req.params = mongoSanitize(req.params);
+  next();
+});
 
 // app.use(xss());
 
