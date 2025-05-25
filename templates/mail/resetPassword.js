@@ -180,7 +180,7 @@ module.exports = (name, link) => {
                                     <p style="font-size: 14px; line-height: 140%;"><span style="color: #000000; line-height: 19.6px;">Hello ${name},</span></p>
                                     <p style="font-size: 14px; line-height: 140%;"> </p>
                                     <p style="font-size: 14px; line-height: 140%;"><span style="color: #000000; line-height: 19.6px;">Please click on the given button to reset your password</span><br /><br /><span style="color: #000000; line-height: 19.6px;">Note: This link is valid for only 10 mins.</span></p>
-                                    <p style="font-size: 14px; line-height: 140%;"><br /><br /><span style="color: #000000; line-height: 19.6px;">Thanks &amp; Regards</span><br /><span style="color: #000000; line-height: 19.6px;">Team Task</span></p>
+                                    <p style="font-size: 14px; line-height: 140%;"><br /><br /><span style="color: #000000; line-height: 19.6px;">Thanks &amp; Regards</span><br /><span style="color: #000000; line-height: 19.6px;">Team TotumTalk</span></p>
                                   </div>
     
                                 </td>
