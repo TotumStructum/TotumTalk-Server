@@ -5,4 +5,6 @@ const authController = require("../controllers/authController");
 
 router.patch("/update-me", authController.protect, userController.updateMe);
 
+router.post("/get-users", authController.protect, userController.getUser);
+
 module.exports = router;

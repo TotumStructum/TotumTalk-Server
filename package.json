@@ -32,6 +32,7 @@
     "mongoose": "^8.15.0",
     "morgan": "^1.10.0",
     "otp-generator": "^4.0.1",
+    "socket.io": "^4.8.1",
     "xss": "^1.0.15"
   }
 }
