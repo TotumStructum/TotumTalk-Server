@@ -5,6 +5,8 @@ const User = require("./models/user");
 
 dotenv.config({ path: "./config.env" });
 
+const path = require("path");
+
 const { Server } = require("socket.io");
 
 process.on("uncaughtException", (err) => {
@@ -19,7 +21,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: "http://localhost:3001",
     methods: ["GET", "POST"],
   },
 });
@@ -50,8 +52,8 @@ io.on("connection", async (socket) => {
 
   console.log(`User connected ${socket_id}`);
 
-  if (user_id) {
-    await User.findByIdAndUpdate(user_id, { socket_id });
+  if (Boolean(user_id)) {
+    await User.findByIdAndUpdate(user_id, { socket_id, status: "Online" });
   }
 
   //event listener
@@ -107,7 +109,40 @@ io.on("connection", async (socket) => {
     });
   });
 
-  socket.on("end", function () {
+  socket.on("text_message", (data) => {
+    console.log("Received Message", data);
+
+    //data: {to, from, text}
+
+    //create a new conversation if it doesn't exist yet or add new message to the messages list
+
+    //save to db
+
+    //emit incomming message to user
+
+    //emit outgoing message from user
+  });
+
+  socket.on("file_message", (data) => {
+    console.log("Received Message", data);
+
+    const fileExtension = path.extname(data.file.name);
+
+    //generate unique filename
+
+    const fileName = `${Date.now()}_${Math.floor(
+      Math.random() * 10000
+    )}${fileExtension}`;
+  });
+
+  socket.on("end", async (data) => {
+    //Find user by id and set offline status
+    if (data.user_id) {
+      await User.findByIdAndUpdate(data.user_id, { status: "Offline" });
+    }
+
+    // TODO => broadcast user_disconnected
+
     console.log("Closing connection");
     socket.disconnect(0);
   });
