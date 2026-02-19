@@ -16,6 +16,7 @@ process.on("uncaughtException", (err) => {
 
 const http = require("http");
 const FriendRequest = require("./models/friendRequest");
+const OneToOneMessage = require("./models/OneToOneMessage");
 
 const server = http.createServer(app);
 
@@ -109,18 +110,92 @@ io.on("connection", async (socket) => {
     });
   });
 
-  socket.on("text_message", (data) => {
+  socket.on("get_direct_conversations", async ({ user_id }, callback) => {
+    const existing_conversations = await OneToOneMessage.find({
+      participants: { $all: [user_id] },
+    }).populate("participants", "firstName lastName _id email status");
+
+    console.log(existing_conversations);
+
+    callback(existing_conversations);
+  });
+
+  socket.om("start_conversation", async (data) => {
+    // data: {to, from}
+    const { to, from } = data;
+    const existing_conversations = await OneToOneMessage.find({
+      participants: { $size: 2, $all: [to, from] },
+    }).populate("participants", "firstName lastName _id email status");
+
+    console.log(existing_conversations[0], "Existing conversation");
+
+    //if no existing conv
+    if (existing_conversations.length === 0) {
+      let new_chat = await OneToOneMessage.create({
+        participants: [to, from],
+      });
+
+      new_chat = await OneToOneMessage.findById(new_chat._id).populate(
+        "participants",
+        "firstName lastName _id email status",
+      );
+
+      console.log(new_chat);
+
+      socket.emit("start_chat", new_chat);
+    }
+    //if there is existing conv
+    else {
+      socket.emit("start_chat", existing_conversations);
+    }
+  });
+
+  socket.on("get_messages", async (data, callback) => {
+    const { messages } = await OneToOneMessage.findById(
+      data.conversation_id,
+    ).select("messages");
+    callback(messages);
+  });
+
+  socket.on("text_message", async (data) => {
     console.log("Received Message", data);
 
-    //data: {to, from, text}
+    //data: {to, from, message, conversation_id, type}
+    const { to, from, message, conversation_id, type } = data;
+
+    const to_user = await User.findById(to);
+    const from_user = await User.findById(from);
+
+    const new_message = {
+      to,
+      from,
+      type,
+      text: message,
+      created_at: Date.now(),
+    };
 
     //create a new conversation if it doesn't exist yet or add new message to the messages list
 
+    const chat = await OneToOneMessage.findById(conversation_id);
+    chat.messages.push(new_message);
+
     //save to db
 
-    //emit incomming message to user
+    await chat.save({});
 
-    //emit outgoing message from user
+    //emit new message to user
+
+    io.to(to_user.socket_id).emit("new_message", {
+      conversation_id,
+      message: new_message,
+    });
+
+    //emit new message from user
+
+    io.to(from_user.socket_id).emit("new_message", {
+      conversation_id,
+      message: new_message,
+    });
   });
 
   socket.on("file_message", (data) => {
@@ -131,7 +206,7 @@ io.on("connection", async (socket) => {
     //generate unique filename
 
     const fileName = `${Date.now()}_${Math.floor(
-      Math.random() * 10000
+      Math.random() * 10000,
     )}${fileExtension}`;
   });
 

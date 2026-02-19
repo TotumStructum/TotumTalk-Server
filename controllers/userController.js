@@ -1,6 +1,7 @@
 const FriendRequest = require("../models/friendRequest");
 const User = require("../models/user");
 const filterObj = require("../utils/filterObj");
+const catchAsync = require("../utils/catchAsync");
 
 exports.updateMe = async (req, res, next) => {
   const { user } = req;
@@ -10,7 +11,7 @@ exports.updateMe = async (req, res, next) => {
     "firstName",
     "lastName",
     "about",
-    "avatar"
+    "avatar",
   );
 
   const update_user = await User.findByIdAndUpdate(user._id, filteredBody, {
@@ -35,7 +36,7 @@ exports.getUser = async (req, res, next) => {
   const remaining_users = all_users.filter(
     (user) =>
       !this_user.friends.includes(user._id) &&
-      user._id.toString() !== req.user._id.toString()
+      user._id.toString() !== req.user._id.toString(),
   );
 
   res.status(200).json({
@@ -57,15 +58,14 @@ exports.getRequests = async (req, res, next) => {
   });
 };
 
-exports.getFriends = async (req, res, next) => {
-  const friends = await User.findById(req.user._id).populate(
+exports.getFriends = catchAsync(async (req, res, next) => {
+  const this_user = await User.findById(req.user._id).populate(
     "friends",
-    "_id firstName lastName"
+    "_id firstName lastName",
   );
-
   res.status(200).json({
     status: "success",
-    data: friends,
+    data: this_user.friends,
     message: "Friends found successfully!",
   });
-};
+});
