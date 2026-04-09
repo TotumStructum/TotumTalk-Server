@@ -5,6 +5,8 @@ const authController = require("../controllers/authController");
 
 router.patch("/update-me", authController.protect, userController.updateMe);
 
+router.get("/me", authController.protect, userController.getMe);
+
 router.get("/get-users", authController.protect, userController.getUser);
 
 router.get("/get-friends", authController.protect, userController.getFriends);
@@ -12,7 +14,7 @@ router.get("/get-friends", authController.protect, userController.getFriends);
 router.get(
   "/get-friend-requests",
   authController.protect,
-  userController.getRequests
+  userController.getRequests,
 );
 
 module.exports = router;

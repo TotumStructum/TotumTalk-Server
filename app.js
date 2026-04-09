@@ -21,7 +21,7 @@ const app = express();
 app.use(
   express.urlencoded({
     extended: true,
-  })
+  }),
 );
 
 app.use((req, res, next) => {
@@ -37,7 +37,7 @@ app.use(
     origin: "*",
     methods: ["GET", "PATCH", "POST", "DELETE", "PUT"],
     credentials: true,
-  })
+  }),
 );
 
 app.use(express.json({ limit: "10kb" }));
@@ -56,8 +56,17 @@ const limiter = rateLimit({
   message: "Too many requests from this IP, Please try again in one hour",
 });
 
-app.use("/tawk", limiter);
+app.use("/auth", limiter);
 
 app.use(routes);
+
+app.use((err, req, res, next) => {
+  console.error(err);
+
+  return res.status(err.statusCode || 500).json({
+    status: "error",
+    message: err.message || "Internal server error",
+  });
+});
 
 module.exports = app;
