@@ -18,6 +18,8 @@ const cors = require("cors");
 
 const app = express();
 
+const path = require("path");
+
 app.use(
   express.urlencoded({
     extended: true,
@@ -45,6 +47,8 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use(helmet());
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
