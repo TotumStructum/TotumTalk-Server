@@ -450,11 +450,105 @@ io.on("connection", async (socket) => {
     },
   );
 
-  socket.on("file_message", async (data) => {
-    io.to(socket.id).emit("message_error", {
-      message: "File messages are not implemented yet",
-    });
-  });
+  socket.on(
+    "file_message",
+    async ({ to, conversation_id, file, type, text = "" } = {}) => {
+      const from = socket.userId;
+
+      if (!to || !from || !conversation_id || !file || !type) {
+        io.to(socket.id).emit("message_error", {
+          message: "Missing required file message data",
+        });
+        return;
+      }
+
+      if (type !== "Document") {
+        io.to(socket.id).emit("message_error", {
+          message: "Only document messages are implemented right now",
+        });
+        return;
+      }
+
+      if (!mongoose.Types.ObjectId.isValid(to)) {
+        io.to(socket.id).emit("message_error", {
+          message: "Invalid recipient id",
+        });
+        return;
+      }
+
+      if (!mongoose.Types.ObjectId.isValid(conversation_id)) {
+        io.to(socket.id).emit("message_error", {
+          message: "Invalid conversation id",
+        });
+        return;
+      }
+
+      const fileUrl = typeof file === "string" ? file.trim() : "";
+      const messageText = typeof text === "string" ? text.trim() : "";
+
+      if (!fileUrl) {
+        io.to(socket.id).emit("message_error", {
+          message: "Document file url is required",
+        });
+        return;
+      }
+
+      const [to_user, from_user] = await Promise.all([
+        User.findById(to).select("socket_id"),
+        User.findById(from).select("socket_id"),
+      ]);
+
+      if (!to_user || !from_user) {
+        io.to(socket.id).emit("message_error", {
+          message: "User not found",
+        });
+        return;
+      }
+
+      const chat = await OneToOneMessage.findOne({
+        _id: conversation_id,
+        participants: { $size: 2, $all: [from, to] },
+      });
+
+      if (!chat) {
+        io.to(socket.id).emit("message_error", {
+          message: "Conversation not found",
+        });
+        return;
+      }
+
+      const newMessage = {
+        to,
+        from,
+        type: "Document",
+        file: fileUrl,
+      };
+
+      if (messageText) {
+        newMessage.text = messageText;
+      }
+
+      chat.messages.push(newMessage);
+
+      await chat.save();
+
+      const saved_message = chat.messages[chat.messages.length - 1];
+
+      if (to_user.socket_id) {
+        io.to(to_user.socket_id).emit("new_message", {
+          conversation_id,
+          message: saved_message,
+        });
+      }
+
+      if (from_user.socket_id) {
+        io.to(from_user.socket_id).emit("new_message", {
+          conversation_id,
+          message: saved_message,
+        });
+      }
+    },
+  );
 
   socket.on("end", async () => {
     if (socket.userId) {
