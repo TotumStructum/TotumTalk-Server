@@ -15,7 +15,7 @@ pnpm-debug.log*
 config.env
 nodemon.json
 
-uploads/documents
+uploads
 
 # Logs
 logs
