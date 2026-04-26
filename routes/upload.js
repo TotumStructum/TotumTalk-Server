@@ -11,4 +11,10 @@ router.post(
   uploadController.uploadDocument,
 );
 
+router.post(
+  "/media",
+  uploadController.uploadMediaMiddleware,
+  uploadController.uploadMedia,
+);
+
 module.exports = router;
