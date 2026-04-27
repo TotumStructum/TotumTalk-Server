@@ -462,9 +462,12 @@ io.on("connection", async (socket) => {
         return;
       }
 
-      if (type !== "Document") {
+      const allowedFileMessageTypes = ["Document", "Media"];
+
+      if (!allowedFileMessageTypes.includes(type)) {
         io.to(socket.id).emit("message_error", {
-          message: "Only document messages are implemented right now",
+          message:
+            "Only document and media file messages are implemented right now",
         });
         return;
       }
@@ -520,7 +523,7 @@ io.on("connection", async (socket) => {
       const newMessage = {
         to,
         from,
-        type: "Document",
+        type,
         file: fileUrl,
       };
 
