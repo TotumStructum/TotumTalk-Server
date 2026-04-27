@@ -71,11 +71,15 @@ app.use("/auth", limiter);
 app.use(routes);
 
 app.use((err, req, res, next) => {
-  console.error(err);
+  const statusCode = err.statusCode || 500;
 
-  return res.status(err.statusCode || 500).json({
+  if (process.env.NODE_ENV !== "test" && statusCode >= 500) {
+    console.error(err);
+  }
+
+  return res.status(statusCode).json({
     status: "error",
-    message: err.message || "Internal server error",
+    message: err.message || "Something went wrong",
   });
 });
 

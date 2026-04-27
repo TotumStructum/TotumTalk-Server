@@ -46,7 +46,10 @@ const createStorage = (destinationDir) =>
 const createFileFilter = (allowedMimeTypes, errorMessage) => {
   return (req, file, cb) => {
     if (!allowedMimeTypes.includes(file.mimetype)) {
-      return cb(new Error(errorMessage));
+      const error = new Error(errorMessage);
+      error.statusCode = 400;
+
+      return cb(error);
     }
 
     cb(null, true);
