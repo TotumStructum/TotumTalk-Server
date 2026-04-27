@@ -35,6 +35,7 @@ const buildFileName = (originalname) => {
 const createStorage = (destinationDir) =>
   multer.diskStorage({
     destination: (req, file, cb) => {
+      fs.mkdirSync(destinationDir, { recursive: true });
       cb(null, destinationDir);
     },
     filename: (req, file, cb) => {
