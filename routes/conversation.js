@@ -10,5 +10,6 @@ router.get(
   "/:conversationId/messages",
   conversationController.getConversationMessages,
 );
+router.post("/group", conversationController.createGroupConversation);
 
 module.exports = router;
