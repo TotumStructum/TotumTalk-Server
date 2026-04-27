@@ -119,3 +119,61 @@ describe("POST /conversation/group", () => {
     );
   });
 });
+
+describe("GET /conversation/group", () => {
+  it("returns only group conversations where the authenticated user is a participant", async () => {
+    const userA = await createUser({
+      email: "groups-owner@example.com",
+      firstName: "Owner",
+    });
+
+    const userB = await createUser({
+      email: "groups-member-b@example.com",
+      firstName: "Member",
+      lastName: "B",
+    });
+
+    const userC = await createUser({
+      email: "groups-member-c@example.com",
+      firstName: "Member",
+      lastName: "C",
+    });
+
+    const outsider = await createUser({
+      email: "groups-outsider@example.com",
+      firstName: "Outsider",
+    });
+
+    const visibleGroup = await GroupMessage.create({
+      title: "Visible Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    await GroupMessage.create({
+      title: "Hidden Group",
+      creator: outsider._id,
+      participants: [outsider._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .get("/conversation/group")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0]._id).toBe(visibleGroup._id.toString());
+    expect(response.body.data[0].title).toBe("Visible Group");
+
+    const participantIds = response.body.data[0].participants.map(
+      (participant) => participant._id.toString(),
+    );
+
+    expect(participantIds).toContain(userA._id.toString());
+    expect(participantIds).toContain(userB._id.toString());
+    expect(participantIds).toContain(userC._id.toString());
+  });
+});

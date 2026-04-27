@@ -143,3 +143,20 @@ exports.createGroupConversation = catchAsync(async (req, res, next) => {
     data: group,
   });
 });
+
+exports.getGroupConversations = catchAsync(async (req, res, next) => {
+  const groups = await GroupMessage.find({
+    participants: req.user._id,
+  })
+    .populate(
+      "participants",
+      "firstName lastName _id email status avatar about",
+    )
+    .populate("creator", "firstName lastName _id email status avatar about")
+    .sort({ updatedAt: -1 });
+
+  return res.status(200).json({
+    status: "success",
+    data: groups,
+  });
+});
