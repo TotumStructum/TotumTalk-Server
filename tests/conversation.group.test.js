@@ -176,4 +176,110 @@ describe("GET /conversation/group", () => {
     expect(participantIds).toContain(userB._id.toString());
     expect(participantIds).toContain(userC._id.toString());
   });
+
+  describe("GET /conversation/group/:groupId/messages", () => {
+    it("returns group messages for a participant", async () => {
+      const userA = await createUser({
+        email: "group-messages-a@example.com",
+        firstName: "User",
+        lastName: "A",
+      });
+
+      const userB = await createUser({
+        email: "group-messages-b@example.com",
+        firstName: "User",
+        lastName: "B",
+      });
+
+      const userC = await createUser({
+        email: "group-messages-c@example.com",
+        firstName: "User",
+        lastName: "C",
+      });
+
+      const group = await GroupMessage.create({
+        title: "Messages Group",
+        creator: userA._id,
+        participants: [userA._id, userB._id, userC._id],
+        messages: [
+          {
+            from: userB._id,
+            type: "Text",
+            text: "Hello group",
+          },
+        ],
+      });
+
+      const token = signToken(userA._id);
+
+      const response = await request(app)
+        .get(`/conversation/group/${group._id}/messages`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body.status).toBe("success");
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].text).toBe("Hello group");
+      expect(response.body.data[0].type).toBe("Text");
+      expect(response.body.data[0].from._id).toBe(userB._id.toString());
+      expect(response.body.data[0].from.firstName).toBe("User");
+    });
+
+    it("does not return group messages for a non-participant", async () => {
+      const userA = await createUser({
+        email: "private-group-a@example.com",
+      });
+
+      const userB = await createUser({
+        email: "private-group-b@example.com",
+      });
+
+      const userC = await createUser({
+        email: "private-group-c@example.com",
+      });
+
+      const outsider = await createUser({
+        email: "private-group-outsider@example.com",
+      });
+
+      const group = await GroupMessage.create({
+        title: "Private Messages Group",
+        creator: userA._id,
+        participants: [userA._id, userB._id, userC._id],
+        messages: [
+          {
+            from: userA._id,
+            type: "Text",
+            text: "Secret message",
+          },
+        ],
+      });
+
+      const token = signToken(outsider._id);
+
+      const response = await request(app)
+        .get(`/conversation/group/${group._id}/messages`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.statusCode).toBe(404);
+      expect(response.body.status).toBe("error");
+      expect(response.body.message).toBe("Group conversation not found");
+    });
+
+    it("rejects invalid group conversation id", async () => {
+      const userA = await createUser({
+        email: "invalid-group-id-user@example.com",
+      });
+
+      const token = signToken(userA._id);
+
+      const response = await request(app)
+        .get("/conversation/group/not-valid-id/messages")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.statusCode).toBe(400);
+      expect(response.body.status).toBe("error");
+      expect(response.body.message).toBe("Invalid group conversation id");
+    });
+  });
 });

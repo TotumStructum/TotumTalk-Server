@@ -160,3 +160,36 @@ exports.getGroupConversations = catchAsync(async (req, res, next) => {
     data: groups,
   });
 });
+
+exports.getGroupConversationMessages = catchAsync(async (req, res, next) => {
+  const { groupId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(groupId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid group conversation id",
+    });
+  }
+
+  const group = await GroupMessage.findOne({
+    _id: groupId,
+    participants: req.user._id,
+  })
+    .select("messages")
+    .populate(
+      "messages.from",
+      "firstName lastName _id email status avatar about",
+    );
+
+  if (!group) {
+    return res.status(404).json({
+      status: "error",
+      message: "Group conversation not found",
+    });
+  }
+
+  return res.status(200).json({
+    status: "success",
+    data: group.messages,
+  });
+});

@@ -8,6 +8,10 @@ router.use(authController.protect);
 router.get("/direct", conversationController.getDirectConversations);
 router.get("/group", conversationController.getGroupConversations);
 router.post("/group", conversationController.createGroupConversation);
+router.get(
+  "/group/:groupId/messages",
+  conversationController.getGroupConversationMessages,
+);
 
 router.get(
   "/:conversationId/messages",
