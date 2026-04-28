@@ -10,6 +10,9 @@ const http = require("http");
 const FriendRequest = require("./models/friendRequest");
 const OneToOneMessage = require("./models/OneToOneMessage");
 const jwt = require("jsonwebtoken");
+const {
+  createGroupTextMessage,
+} = require("./services/groupConversationService");
 
 const server = http.createServer(app);
 
@@ -449,6 +452,30 @@ io.on("connection", async (socket) => {
       });
     },
   );
+
+  socket.on("group_text_message", async ({ group_id, message, type } = {}) => {
+    try {
+      const result = await createGroupTextMessage({
+        userId: socket.userId,
+        groupId: group_id,
+        message,
+        type,
+      });
+
+      result.recipients.forEach((recipient) => {
+        if (!recipient.socket_id) return;
+
+        io.to(recipient.socket_id).emit("new_group_message", {
+          group_id,
+          message: result.message,
+        });
+      });
+    } catch (error) {
+      io.to(socket.id).emit("message_error", {
+        message: error.message || "Failed to send group message",
+      });
+    }
+  });
 
   socket.on(
     "file_message",

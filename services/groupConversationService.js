@@ -1,0 +1,62 @@
+const mongoose = require("mongoose");
+const GroupMessage = require("../models/GroupMessage");
+const User = require("../models/user");
+
+const createServiceError = (message, statusCode = 400) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
+
+exports.createGroupTextMessage = async ({ userId, groupId, message, type }) => {
+  if (!userId) {
+    throw createServiceError("Authenticated user is required", 401);
+  }
+
+  if (!groupId) {
+    throw createServiceError("Group conversation id is required");
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(groupId)) {
+    throw createServiceError("Invalid group conversation id");
+  }
+
+  const trimmedMessage = typeof message === "string" ? message.trim() : "";
+
+  if (!trimmedMessage) {
+    throw createServiceError("Message text cannot be empty");
+  }
+
+  if (!["Text", "Link"].includes(type)) {
+    throw createServiceError("Invalid message type for group_text_message");
+  }
+
+  const group = await GroupMessage.findOne({
+    _id: groupId,
+    participants: userId,
+  });
+
+  if (!group) {
+    throw createServiceError("Group conversation not found", 404);
+  }
+
+  group.messages.push({
+    from: userId,
+    type,
+    text: trimmedMessage,
+  });
+
+  await group.save();
+
+  const savedMessage = group.messages[group.messages.length - 1].toObject();
+
+  const recipients = await User.find({
+    _id: { $in: group.participants },
+  }).select("_id socket_id");
+
+  return {
+    group,
+    message: savedMessage,
+    recipients,
+  };
+};
