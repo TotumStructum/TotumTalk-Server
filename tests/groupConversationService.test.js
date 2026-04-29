@@ -48,7 +48,9 @@ describe("createGroupTextMessage", () => {
 
     expect(result.message.text).toBe("Hello group");
     expect(result.message.type).toBe("Text");
-    expect(result.message.from.toString()).toBe(userB._id.toString());
+    expect(result.message.from._id.toString()).toBe(userB._id.toString());
+    expect(result.message.from.firstName).toBe(userB.firstName);
+    expect(result.message.from.email).toBe(userB.email);
     expect(result.recipients).toHaveLength(3);
 
     const updatedGroup = await GroupMessage.findById(group._id);

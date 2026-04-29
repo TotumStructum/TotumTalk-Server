@@ -50,13 +50,21 @@ exports.createGroupTextMessage = async ({ userId, groupId, message, type }) => {
 
   const savedMessage = group.messages[group.messages.length - 1].toObject();
 
-  const recipients = await User.find({
-    _id: { $in: group.participants },
-  }).select("_id socket_id");
+  const [sender, recipients] = await Promise.all([
+    User.findById(userId).select(
+      "firstName lastName _id email status avatar about",
+    ),
+    User.find({
+      _id: { $in: group.participants },
+    }).select("_id socket_id"),
+  ]);
 
   return {
     group,
-    message: savedMessage,
+    message: {
+      ...savedMessage,
+      from: sender,
+    },
     recipients,
   };
 };
