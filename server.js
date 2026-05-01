@@ -12,6 +12,7 @@ const OneToOneMessage = require("./models/OneToOneMessage");
 const jwt = require("jsonwebtoken");
 const {
   createGroupTextMessage,
+  createGroupFileMessage,
 } = require("./services/groupConversationService");
 
 const server = http.createServer(app);
@@ -476,6 +477,34 @@ io.on("connection", async (socket) => {
       });
     }
   });
+
+  socket.on(
+    "group_file_message",
+    async ({ group_id, file, type, text = "" } = {}) => {
+      try {
+        const result = await createGroupFileMessage({
+          userId: socket.userId,
+          groupId: group_id,
+          file,
+          type,
+          text,
+        });
+
+        result.recipients.forEach((recipient) => {
+          if (!recipient.socket_id) return;
+
+          io.to(recipient.socket_id).emit("new_group_message", {
+            group_id,
+            message: result.message,
+          });
+        });
+      } catch (error) {
+        io.to(socket.id).emit("message_error", {
+          message: error.message || "Failed to send group file message",
+        });
+      }
+    },
+  );
 
   socket.on(
     "file_message",

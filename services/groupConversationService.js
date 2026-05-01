@@ -8,6 +8,17 @@ const createServiceError = (message, statusCode = 400) => {
   return error;
 };
 
+const getSenderAndRecipients = async ({ userId, participants }) => {
+  return await Promise.all([
+    User.findById(userId).select(
+      "firstName lastName _id email status avatar about",
+    ),
+    User.find({
+      _id: { $in: participants },
+    }).select("_id socket_id"),
+  ]);
+};
+
 exports.createGroupTextMessage = async ({ userId, groupId, message, type }) => {
   if (!userId) {
     throw createServiceError("Authenticated user is required", 401);
@@ -50,14 +61,80 @@ exports.createGroupTextMessage = async ({ userId, groupId, message, type }) => {
 
   const savedMessage = group.messages[group.messages.length - 1].toObject();
 
-  const [sender, recipients] = await Promise.all([
-    User.findById(userId).select(
-      "firstName lastName _id email status avatar about",
-    ),
-    User.find({
-      _id: { $in: group.participants },
-    }).select("_id socket_id"),
-  ]);
+  const [sender, recipients] = await getSenderAndRecipients({
+    userId,
+    participants: group.participants,
+  });
+
+  return {
+    group,
+    message: {
+      ...savedMessage,
+      from: sender,
+    },
+    recipients,
+  };
+};
+
+exports.createGroupFileMessage = async ({
+  userId,
+  groupId,
+  file,
+  type,
+  text = "",
+}) => {
+  if (!userId) {
+    throw createServiceError("Authenticated user is required", 401);
+  }
+
+  if (!groupId) {
+    throw createServiceError("Group conversation id is required");
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(groupId)) {
+    throw createServiceError("Invalid group conversation id");
+  }
+
+  if (!["Document", "Media"].includes(type)) {
+    throw createServiceError("Invalid message type for group_file_message");
+  }
+
+  const fileUrl = typeof file === "string" ? file.trim() : "";
+  const messageText = typeof text === "string" ? text.trim() : "";
+
+  if (!fileUrl) {
+    throw createServiceError("Group file url is required");
+  }
+
+  const group = await GroupMessage.findOne({
+    _id: groupId,
+    participants: userId,
+  });
+
+  if (!group) {
+    throw createServiceError("Group conversation not found", 404);
+  }
+
+  const newMessage = {
+    from: userId,
+    type,
+    file: fileUrl,
+  };
+
+  if (messageText) {
+    newMessage.text = messageText;
+  }
+
+  group.messages.push(newMessage);
+
+  await group.save();
+
+  const savedMessage = group.messages[group.messages.length - 1].toObject();
+
+  const [sender, recipients] = await getSenderAndRecipients({
+    userId,
+    participants: group.participants,
+  });
 
   return {
     group,
