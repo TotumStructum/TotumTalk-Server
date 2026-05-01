@@ -14,6 +14,7 @@ const {
   createGroupTextMessage,
   createGroupFileMessage,
 } = require("./services/groupConversationService");
+const { rejectFriendRequest } = require("./services/friendRequestService");
 
 const server = http.createServer(app);
 
@@ -236,6 +237,31 @@ io.on("connection", async (socket) => {
     if (receiver.socket_id) {
       io.to(receiver.socket_id).emit("request_accepted", {
         message: "Friend request accepted",
+      });
+    }
+  });
+
+  socket.on("reject_request", async ({ request_id } = {}) => {
+    try {
+      const result = await rejectFriendRequest({
+        userId: socket.userId,
+        requestId: request_id,
+      });
+
+      if (result.sender?.socket_id) {
+        io.to(result.sender.socket_id).emit("request_rejected", {
+          message: "Friend request rejected",
+        });
+      }
+
+      if (result.recipient?.socket_id) {
+        io.to(result.recipient.socket_id).emit("request_rejected", {
+          message: "Friend request rejected",
+        });
+      }
+    } catch (error) {
+      io.to(socket.id).emit("request_error", {
+        message: error.message || "Failed to reject friend request",
       });
     }
   });
