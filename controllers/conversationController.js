@@ -48,6 +48,78 @@ exports.getConversationMessages = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.toggleDirectMessageStar = catchAsync(async (req, res, next) => {
+  const { conversationId, messageId } = req.params;
+  const { starred } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid conversation id",
+    });
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(messageId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid message id",
+    });
+  }
+
+  if (typeof starred !== "boolean") {
+    return res.status(400).json({
+      status: "error",
+      message: "Starred value must be boolean",
+    });
+  }
+
+  const conversation = await OneToOneMessage.findOne({
+    _id: conversationId,
+    participants: req.user._id,
+  });
+
+  if (!conversation) {
+    return res.status(404).json({
+      status: "error",
+      message: "Conversation not found",
+    });
+  }
+
+  const message = conversation.messages.id(messageId);
+
+  if (!message) {
+    return res.status(404).json({
+      status: "error",
+      message: "Message not found",
+    });
+  }
+
+  const currentUserId = req.user._id.toString();
+  const starredBy = Array.isArray(message.starredBy) ? message.starredBy : [];
+
+  const alreadyStarred = starredBy.some(
+    (userId) => userId.toString() === currentUserId,
+  );
+
+  if (starred && !alreadyStarred) {
+    message.starredBy.push(req.user._id);
+  }
+
+  if (!starred && alreadyStarred) {
+    message.starredBy = message.starredBy.filter(
+      (userId) => userId.toString() !== currentUserId,
+    );
+  }
+
+  await conversation.save();
+
+  return res.status(200).json({
+    status: "success",
+    data: message,
+    message: starred ? "Message starred" : "Message unstarred",
+  });
+});
+
 exports.createGroupConversation = catchAsync(async (req, res, next) => {
   const { title, members } = req.body;
   const trimmedTitle = typeof title === "string" ? title.trim() : "";

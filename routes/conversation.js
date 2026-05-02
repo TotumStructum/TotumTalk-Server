@@ -13,6 +13,11 @@ router.get(
   conversationController.getGroupConversationMessages,
 );
 
+router.patch(
+  "/:conversationId/messages/:messageId/star",
+  conversationController.toggleDirectMessageStar,
+);
+
 router.get(
   "/:conversationId/messages",
   conversationController.getConversationMessages,

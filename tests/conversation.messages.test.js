@@ -110,3 +110,162 @@ describe("GET /conversation/:conversationId/messages", () => {
     expect(response.body.message).toBe("Conversation not found");
   });
 });
+
+describe("PATCH /conversation/:conversationId/messages/:messageId/star", () => {
+  it("stars and unstars a direct message for a conversation participant", async () => {
+    const userA = await createUser({
+      email: "star-message-a@example.com",
+      firstName: "Star",
+      lastName: "A",
+    });
+
+    const userB = await createUser({
+      email: "star-message-b@example.com",
+      firstName: "Star",
+      lastName: "B",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Important message",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const messageId = conversation.messages[0]._id;
+    const token = signToken(userA._id);
+
+    const starResponse = await request(app)
+      .patch(`/conversation/${conversation._id}/messages/${messageId}/star`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ starred: true });
+
+    expect(starResponse.statusCode).toBe(200);
+    expect(starResponse.body.status).toBe("success");
+    expect(starResponse.body.message).toBe("Message starred");
+    expect(starResponse.body.data.starredBy).toContain(userA._id.toString());
+
+    const unstarResponse = await request(app)
+      .patch(`/conversation/${conversation._id}/messages/${messageId}/star`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ starred: false });
+
+    expect(unstarResponse.statusCode).toBe(200);
+    expect(unstarResponse.body.status).toBe("success");
+    expect(unstarResponse.body.message).toBe("Message unstarred");
+    expect(unstarResponse.body.data.starredBy).not.toContain(
+      userA._id.toString(),
+    );
+  });
+
+  it("does not allow a user outside the conversation to star a message", async () => {
+    const userA = await createUser({
+      email: "star-private-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "star-private-b@example.com",
+    });
+
+    const outsider = await createUser({
+      email: "star-private-outsider@example.com",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Private starred message",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const token = signToken(outsider._id);
+
+    const response = await request(app)
+      .patch(
+        `/conversation/${conversation._id}/messages/${conversation.messages[0]._id}/star`,
+      )
+      .set("Authorization", `Bearer ${token}`)
+      .send({ starred: true });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Conversation not found");
+  });
+
+  it("rejects invalid starred value", async () => {
+    const userA = await createUser({
+      email: "star-invalid-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "star-invalid-b@example.com",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Invalid star value",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .patch(
+        `/conversation/${conversation._id}/messages/${conversation.messages[0]._id}/star`,
+      )
+      .set("Authorization", `Bearer ${token}`)
+      .send({ starred: "yes" });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Starred value must be boolean");
+  });
+
+  it("returns 404 when message does not exist", async () => {
+    const userA = await createUser({
+      email: "star-missing-message-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "star-missing-message-b@example.com",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [],
+    });
+
+    const token = signToken(userA._id);
+    const missingMessageId = userB._id;
+
+    const response = await request(app)
+      .patch(
+        `/conversation/${conversation._id}/messages/${missingMessageId}/star`,
+      )
+      .set("Authorization", `Bearer ${token}`)
+      .send({ starred: true });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Message not found");
+  });
+});

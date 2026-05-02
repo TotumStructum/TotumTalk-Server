@@ -35,6 +35,12 @@ const messageSchema = new mongoose.Schema(
         return ["Media", "Document"].includes(this.type);
       },
     },
+    starredBy: [
+      {
+        type: mongoose.Schema.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   { _id: true },
 );
