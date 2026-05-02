@@ -7,6 +7,7 @@ const User = require("../models/user");
 exports.getDirectConversations = catchAsync(async (req, res, next) => {
   const conversations = await OneToOneMessage.find({
     participants: req.user._id,
+    deletedBy: { $ne: req.user._id },
   })
     .populate(
       "participants",
@@ -33,6 +34,7 @@ exports.getConversationMessages = catchAsync(async (req, res, next) => {
   const conversation = await OneToOneMessage.findOne({
     _id: conversationId,
     participants: req.user._id,
+    deletedBy: { $ne: req.user._id },
   }).select("messages");
 
   if (!conversation) {
@@ -76,6 +78,7 @@ exports.toggleDirectMessageStar = catchAsync(async (req, res, next) => {
   const conversation = await OneToOneMessage.findOne({
     _id: conversationId,
     participants: req.user._id,
+    deletedBy: { $ne: req.user._id },
   });
 
   if (!conversation) {
@@ -263,5 +266,62 @@ exports.getGroupConversationMessages = catchAsync(async (req, res, next) => {
   return res.status(200).json({
     status: "success",
     data: group.messages,
+  });
+});
+
+exports.deleteDirectConversation = catchAsync(async (req, res, next) => {
+  const { conversationId } = req.params;
+  const { scope } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid conversation id",
+    });
+  }
+
+  if (!["me", "everyone"].includes(scope)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Delete scope must be either me or everyone",
+    });
+  }
+
+  const conversation = await OneToOneMessage.findOne({
+    _id: conversationId,
+    participants: req.user._id,
+  });
+
+  if (!conversation) {
+    return res.status(404).json({
+      status: "error",
+      message: "Conversation not found",
+    });
+  }
+
+  if (scope === "everyone") {
+    await OneToOneMessage.findByIdAndDelete(conversationId);
+
+    return res.status(200).json({
+      status: "success",
+      data: null,
+      message: "Conversation deleted for everyone",
+    });
+  }
+
+  const currentUserId = req.user._id.toString();
+  const alreadyDeleted = conversation.deletedBy.some(
+    (userId) => userId.toString() === currentUserId,
+  );
+
+  if (!alreadyDeleted) {
+    conversation.deletedBy.push(req.user._id);
+    await conversation.save();
+  }
+
+  return res.status(200).json({
+    status: "success",
+    data: conversation,
+    message: "Conversation deleted for you",
   });
 });

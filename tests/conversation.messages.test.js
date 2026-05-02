@@ -109,6 +109,44 @@ describe("GET /conversation/:conversationId/messages", () => {
     expect(response.body.status).toBe("error");
     expect(response.body.message).toBe("Conversation not found");
   });
+
+  it("does not return messages for a conversation deleted by the authenticated user", async () => {
+    const userA = await createUser({
+      email: "deleted-messages-a@example.com",
+      firstName: "Deleted",
+      lastName: "A",
+    });
+
+    const userB = await createUser({
+      email: "deleted-messages-b@example.com",
+      firstName: "Deleted",
+      lastName: "B",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      deletedBy: [userA._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Hidden message",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .get(`/conversation/${conversation._id}/messages`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Conversation not found");
+  });
 });
 
 describe("PATCH /conversation/:conversationId/messages/:messageId/star", () => {
@@ -267,5 +305,192 @@ describe("PATCH /conversation/:conversationId/messages/:messageId/star", () => {
     expect(response.statusCode).toBe(404);
     expect(response.body.status).toBe("error");
     expect(response.body.message).toBe("Message not found");
+  });
+});
+
+describe("DELETE /conversation/:conversationId", () => {
+  it("deletes a direct conversation only for the authenticated user", async () => {
+    const userA = await createUser({
+      email: "delete-me-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "delete-me-b@example.com",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Delete for me",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete(`/conversation/${conversation._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ scope: "me" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.message).toBe("Conversation deleted for you");
+    expect(response.body.data.deletedBy).toContain(userA._id.toString());
+
+    const updatedConversation = await OneToOneMessage.findById(
+      conversation._id,
+    );
+
+    expect(updatedConversation).not.toBeNull();
+    expect(updatedConversation.deletedBy.map((id) => id.toString())).toContain(
+      userA._id.toString(),
+    );
+    expect(
+      updatedConversation.deletedBy.map((id) => id.toString()),
+    ).not.toContain(userB._id.toString());
+  });
+
+  it("deletes a direct conversation for everyone", async () => {
+    const userA = await createUser({
+      email: "delete-everyone-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "delete-everyone-b@example.com",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Delete for everyone",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete(`/conversation/${conversation._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ scope: "everyone" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.message).toBe("Conversation deleted for everyone");
+    expect(response.body.data).toBeNull();
+
+    const deletedConversation = await OneToOneMessage.findById(
+      conversation._id,
+    );
+
+    expect(deletedConversation).toBeNull();
+  });
+
+  it("does not allow a user outside the conversation to delete it", async () => {
+    const userA = await createUser({
+      email: "delete-private-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "delete-private-b@example.com",
+    });
+
+    const outsider = await createUser({
+      email: "delete-private-outsider@example.com",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Private delete",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const token = signToken(outsider._id);
+
+    const response = await request(app)
+      .delete(`/conversation/${conversation._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ scope: "me" });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Conversation not found");
+
+    const existingConversation = await OneToOneMessage.findById(
+      conversation._id,
+    );
+
+    expect(existingConversation).not.toBeNull();
+  });
+
+  it("rejects invalid delete scope", async () => {
+    const userA = await createUser({
+      email: "delete-invalid-scope-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "delete-invalid-scope-b@example.com",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Invalid scope",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete(`/conversation/${conversation._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ scope: "invalid" });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe(
+      "Delete scope must be either me or everyone",
+    );
+  });
+
+  it("rejects invalid conversation id when deleting", async () => {
+    const userA = await createUser({
+      email: "delete-invalid-id@example.com",
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete("/conversation/invalid-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ scope: "me" });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Invalid conversation id");
   });
 });

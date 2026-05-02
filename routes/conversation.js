@@ -18,6 +18,11 @@ router.patch(
   conversationController.toggleDirectMessageStar,
 );
 
+router.delete(
+  "/:conversationId",
+  conversationController.deleteDirectConversation,
+);
+
 router.get(
   "/:conversationId/messages",
   conversationController.getConversationMessages,

@@ -86,4 +86,56 @@ describe("GET /conversation/direct", () => {
     expect(participantIds).toContain(userB._id.toString());
     expect(participantIds).not.toContain(userC._id.toString());
   });
+
+  it("does not return conversations deleted by the authenticated user", async () => {
+    const userA = await createUser({
+      email: "deleted-direct-a@example.com",
+      firstName: "Deleted",
+      lastName: "A",
+    });
+
+    const userB = await createUser({
+      email: "deleted-direct-b@example.com",
+      firstName: "Deleted",
+      lastName: "B",
+    });
+
+    await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      deletedBy: [userA._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Hidden conversation",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const visibleConversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Visible conversation",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .get("/conversation/direct")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0]._id).toBe(visibleConversation._id.toString());
+  });
 });

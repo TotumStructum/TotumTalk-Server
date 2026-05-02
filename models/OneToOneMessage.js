@@ -75,6 +75,12 @@ const oneToOneMessageSchema = new mongoose.Schema(
         },
       ],
     },
+    deletedBy: [
+      {
+        type: mongoose.Schema.ObjectId,
+        ref: "User",
+      },
+    ],
     messages: [messageSchema],
   },
   { timestamps: true },
