@@ -1,6 +1,9 @@
 const User = require("../models/user");
 const FriendRequest = require("../models/friendRequest");
-const { rejectFriendRequest } = require("../services/friendRequestService");
+const {
+  rejectFriendRequest,
+  cancelFriendRequest,
+} = require("../services/friendRequestService");
 
 const createUser = async (overrides = {}) => {
   return await User.create({
@@ -112,6 +115,133 @@ describe("rejectFriendRequest", () => {
       rejectFriendRequest({
         userId: recipient._id,
         requestId: recipient._id,
+      }),
+    ).rejects.toThrow("Friend request not found");
+  });
+});
+
+describe("cancelFriendRequest", () => {
+  it("cancels an outgoing friend request for the sender", async () => {
+    const sender = await createUser({
+      email: "cancel-sender@example.com",
+      socket_id: "cancel-sender-socket",
+    });
+
+    const recipient = await createUser({
+      email: "cancel-recipient@example.com",
+      socket_id: "cancel-recipient-socket",
+    });
+
+    const request = await FriendRequest.create({
+      sender: sender._id,
+      recipient: recipient._id,
+    });
+
+    const result = await cancelFriendRequest({
+      userId: sender._id,
+      requestId: request._id,
+    });
+
+    expect(result.sender._id.toString()).toBe(sender._id.toString());
+    expect(result.sender.socket_id).toBe("cancel-sender-socket");
+    expect(result.recipient._id.toString()).toBe(recipient._id.toString());
+    expect(result.recipient.socket_id).toBe("cancel-recipient-socket");
+
+    const deletedRequest = await FriendRequest.findById(request._id);
+
+    expect(deletedRequest).toBeNull();
+  });
+
+  it("does not allow a non-sender to cancel a friend request", async () => {
+    const sender = await createUser({
+      email: "cancel-private-sender@example.com",
+    });
+
+    const recipient = await createUser({
+      email: "cancel-private-recipient@example.com",
+    });
+
+    const outsider = await createUser({
+      email: "cancel-private-outsider@example.com",
+    });
+
+    const request = await FriendRequest.create({
+      sender: sender._id,
+      recipient: recipient._id,
+    });
+
+    await expect(
+      cancelFriendRequest({
+        userId: outsider._id,
+        requestId: request._id,
+      }),
+    ).rejects.toThrow("You are not allowed to cancel this request");
+
+    const existingRequest = await FriendRequest.findById(request._id);
+
+    expect(existingRequest).not.toBeNull();
+  });
+
+  it("does not allow the recipient to cancel an incoming friend request", async () => {
+    const sender = await createUser({
+      email: "cancel-recipient-check-sender@example.com",
+    });
+
+    const recipient = await createUser({
+      email: "cancel-recipient-check-recipient@example.com",
+    });
+
+    const request = await FriendRequest.create({
+      sender: sender._id,
+      recipient: recipient._id,
+    });
+
+    await expect(
+      cancelFriendRequest({
+        userId: recipient._id,
+        requestId: request._id,
+      }),
+    ).rejects.toThrow("You are not allowed to cancel this request");
+
+    const existingRequest = await FriendRequest.findById(request._id);
+
+    expect(existingRequest).not.toBeNull();
+  });
+
+  it("rejects missing friend request id when cancelling", async () => {
+    const sender = await createUser({
+      email: "cancel-missing-id@example.com",
+    });
+
+    await expect(
+      cancelFriendRequest({
+        userId: sender._id,
+      }),
+    ).rejects.toThrow("Friend request id is required");
+  });
+
+  it("rejects invalid friend request id when cancelling", async () => {
+    const sender = await createUser({
+      email: "cancel-invalid-id@example.com",
+    });
+
+    await expect(
+      cancelFriendRequest({
+        userId: sender._id,
+        requestId: "invalid-id",
+      }),
+    ).rejects.toThrow("Invalid friend request id");
+  });
+
+  it("rejects non-existing friend request id when cancelling", async () => {
+    const sender = await createUser({
+      email: "cancel-not-found@example.com",
+    });
+
+    await expect(
+      cancelFriendRequest({
+        userId: sender._id,
+        requestId: sender._id,
       }),
     ).rejects.toThrow("Friend request not found");
   });

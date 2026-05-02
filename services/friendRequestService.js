@@ -40,3 +40,37 @@ exports.rejectFriendRequest = async ({ userId, requestId }) => {
     recipient: request.recipient,
   };
 };
+
+exports.cancelFriendRequest = async ({ userId, requestId }) => {
+  if (!userId) {
+    throw createServiceError("Authenticated user is required", 401);
+  }
+
+  if (!requestId) {
+    throw createServiceError("Friend request id is required");
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(requestId)) {
+    throw createServiceError("Invalid friend request id");
+  }
+
+  const request = await FriendRequest.findById(requestId).populate(
+    "sender recipient",
+    "_id socket_id",
+  );
+
+  if (!request) {
+    throw createServiceError("Friend request not found", 404);
+  }
+
+  if (request.sender._id.toString() !== userId.toString()) {
+    throw createServiceError("You are not allowed to cancel this request", 403);
+  }
+
+  await FriendRequest.findByIdAndDelete(requestId);
+
+  return {
+    sender: request.sender,
+    recipient: request.recipient,
+  };
+};
