@@ -15,6 +15,7 @@ const {
   createGroupFileMessage,
 } = require("./services/groupConversationService");
 const { rejectFriendRequest } = require("./services/friendRequestService");
+const { removeFriend } = require("./services/friendshipService");
 
 const server = http.createServer(app);
 
@@ -262,6 +263,31 @@ io.on("connection", async (socket) => {
     } catch (error) {
       io.to(socket.id).emit("request_error", {
         message: error.message || "Failed to reject friend request",
+      });
+    }
+  });
+
+  socket.on("remove_friend", async ({ friend_id } = {}) => {
+    try {
+      const result = await removeFriend({
+        userId: socket.userId,
+        friendId: friend_id,
+      });
+
+      if (result.user?.socket_id) {
+        io.to(result.user.socket_id).emit("friend_removed", {
+          message: "Friend removed",
+        });
+      }
+
+      if (result.friend?.socket_id) {
+        io.to(result.friend.socket_id).emit("friend_removed", {
+          message: "Friend removed",
+        });
+      }
+    } catch (error) {
+      io.to(socket.id).emit("request_error", {
+        message: error.message || "Failed to remove friend",
       });
     }
   });
