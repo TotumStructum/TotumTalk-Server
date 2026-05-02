@@ -92,6 +92,20 @@ exports.getRequests = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.getSentRequests = catchAsync(async (req, res, next) => {
+  const requests = await FriendRequest.find({
+    sender: req.user._id,
+  })
+    .populate("recipient", "_id firstName lastName avatar status")
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    status: "success",
+    data: requests,
+    message: "Sent friend requests found successfully!",
+  });
+});
+
 exports.getFriends = catchAsync(async (req, res, next) => {
   const this_user = await User.findById(req.user._id).populate(
     "friends",

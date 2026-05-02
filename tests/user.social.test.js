@@ -197,4 +197,77 @@ describe("User social endpoints", () => {
     expect(response.body.data[0].sender).toHaveProperty("avatar");
     expect(response.body.data[0].sender).toHaveProperty("status");
   });
+
+  it("returns outgoing friend requests with populated recipient in GET /user/get-sent-friend-requests", async () => {
+    const currentUser = await createUser({
+      email: "sent-requests-owner@example.com",
+      firstName: "Sent",
+      lastName: "Owner",
+    });
+
+    const recipientA = await createUser({
+      email: "sent-recipient-a@example.com",
+      firstName: "Recipient",
+      lastName: "A",
+      status: "Online",
+      avatar: "recipient-a.png",
+    });
+
+    const recipientB = await createUser({
+      email: "sent-recipient-b@example.com",
+      firstName: "Recipient",
+      lastName: "B",
+      status: "Offline",
+      avatar: "recipient-b.png",
+    });
+
+    const otherSender = await createUser({
+      email: "other-sender@example.com",
+    });
+
+    const unrelatedRecipient = await createUser({
+      email: "unrelated-recipient@example.com",
+    });
+
+    await FriendRequest.create({
+      sender: currentUser._id,
+      recipient: recipientA._id,
+    });
+
+    await FriendRequest.create({
+      sender: currentUser._id,
+      recipient: recipientB._id,
+    });
+
+    await FriendRequest.create({
+      sender: otherSender._id,
+      recipient: unrelatedRecipient._id,
+    });
+
+    const token = signToken(currentUser._id);
+
+    const response = await request(app)
+      .get("/user/get-sent-friend-requests")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.message).toBe(
+      "Sent friend requests found successfully!",
+    );
+    expect(response.body.data).toHaveLength(2);
+
+    const recipientIds = response.body.data.map((requestItem) =>
+      requestItem.recipient._id.toString(),
+    );
+
+    expect(recipientIds).toContain(recipientA._id.toString());
+    expect(recipientIds).toContain(recipientB._id.toString());
+    expect(recipientIds).not.toContain(unrelatedRecipient._id.toString());
+
+    expect(response.body.data[0].recipient).toHaveProperty("firstName");
+    expect(response.body.data[0].recipient).toHaveProperty("lastName");
+    expect(response.body.data[0].recipient).toHaveProperty("avatar");
+    expect(response.body.data[0].recipient).toHaveProperty("status");
+  });
 });

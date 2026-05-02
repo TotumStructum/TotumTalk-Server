@@ -17,4 +17,10 @@ router.get(
   userController.getRequests,
 );
 
+router.get(
+  "/get-sent-friend-requests",
+  authController.protect,
+  userController.getSentRequests,
+);
+
 module.exports = router;
