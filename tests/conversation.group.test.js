@@ -621,3 +621,217 @@ describe("PATCH /conversation/group/:groupId/participants", () => {
     expect(response.body.message).toBe("Invalid group conversation id");
   });
 });
+
+describe("DELETE /conversation/group/:groupId/participants", () => {
+  it("allows the group creator to remove participants without deleting messages", async () => {
+    const userA = await createUser({
+      email: "remove-group-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "remove-group-member-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "remove-group-member-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Remove Members Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+      messages: [
+        {
+          from: userB._id,
+          type: "Text",
+          text: "Message should stay",
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete(`/conversation/group/${group._id}/participants`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        members: [userB._id.toString()],
+      });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.data.participants).toHaveLength(2);
+
+    const participantIds = response.body.data.participants.map((participant) =>
+      participant._id.toString(),
+    );
+
+    expect(participantIds).toContain(userA._id.toString());
+    expect(participantIds).toContain(userC._id.toString());
+    expect(participantIds).not.toContain(userB._id.toString());
+
+    const savedGroup = await GroupMessage.findById(group._id);
+
+    expect(savedGroup.messages).toHaveLength(1);
+    expect(savedGroup.messages[0].text).toBe("Message should stay");
+  });
+
+  it("does not allow a non-creator participant to remove members", async () => {
+    const userA = await createUser({
+      email: "remove-non-creator-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "remove-non-creator-member-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "remove-non-creator-member-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Creator Remove Only Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userB._id);
+
+    const response = await request(app)
+      .delete(`/conversation/group/${group._id}/participants`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        members: [userC._id.toString()],
+      });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe(
+      "Only group creator can remove participants",
+    );
+  });
+
+  it("does not allow removing the group creator", async () => {
+    const userA = await createUser({
+      email: "remove-creator-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "remove-creator-member-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "remove-creator-member-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Cannot Remove Creator Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete(`/conversation/group/${group._id}/participants`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        members: [userA._id.toString()],
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Use leave group to remove yourself");
+  });
+
+  it("does not remove users who are not group participants", async () => {
+    const userA = await createUser({
+      email: "remove-not-participant-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "remove-not-participant-member-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "remove-not-participant-member-c@example.com",
+    });
+
+    const outsider = await createUser({
+      email: "remove-not-participant-outsider@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Participants Only Remove Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete(`/conversation/group/${group._id}/participants`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        members: [outsider._id.toString()],
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe(
+      "One or more users are not group participants",
+    );
+  });
+
+  it("rejects invalid member id when removing participants", async () => {
+    const userA = await createUser({
+      email: "remove-invalid-member-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "remove-invalid-member-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "remove-invalid-member-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Invalid Remove Member Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete(`/conversation/group/${group._id}/participants`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        members: ["not-valid-id"],
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Invalid group member id");
+  });
+
+  it("rejects invalid group conversation id when removing participants", async () => {
+    const userA = await createUser({
+      email: "remove-invalid-group-id@example.com",
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete("/conversation/group/not-valid-id/participants")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        members: [],
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Invalid group conversation id");
+  });
+});

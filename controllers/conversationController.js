@@ -517,6 +517,117 @@ exports.addGroupParticipants = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.removeGroupParticipants = catchAsync(async (req, res, next) => {
+  const { groupId } = req.params;
+  const { members } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(groupId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid group conversation id",
+    });
+  }
+
+  if (!Array.isArray(members)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Group members are required",
+    });
+  }
+
+  const uniqueMemberIds = [
+    ...new Set(members.map((memberId) => memberId?.toString()).filter(Boolean)),
+  ];
+
+  if (uniqueMemberIds.length === 0) {
+    return res.status(400).json({
+      status: "error",
+      message: "Group members are required",
+    });
+  }
+
+  const hasInvalidMemberId = uniqueMemberIds.some(
+    (memberId) => !mongoose.Types.ObjectId.isValid(memberId),
+  );
+
+  if (hasInvalidMemberId) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid group member id",
+    });
+  }
+
+  const currentUserId = req.user._id.toString();
+
+  if (uniqueMemberIds.includes(currentUserId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Use leave group to remove yourself",
+    });
+  }
+
+  let group = await GroupMessage.findOne({
+    _id: groupId,
+    participants: req.user._id,
+  });
+
+  if (!group) {
+    return res.status(404).json({
+      status: "error",
+      message: "Group conversation not found",
+    });
+  }
+
+  const creatorId = group.creator.toString();
+
+  if (creatorId !== currentUserId) {
+    return res.status(403).json({
+      status: "error",
+      message: "Only group creator can remove participants",
+    });
+  }
+
+  if (uniqueMemberIds.includes(creatorId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Group creator cannot be removed",
+    });
+  }
+
+  const existingParticipantIds = group.participants.map((participantId) =>
+    participantId.toString(),
+  );
+
+  const allMembersAreParticipants = uniqueMemberIds.every((memberId) =>
+    existingParticipantIds.includes(memberId),
+  );
+
+  if (!allMembersAreParticipants) {
+    return res.status(400).json({
+      status: "error",
+      message: "One or more users are not group participants",
+    });
+  }
+
+  group.participants = group.participants.filter(
+    (participantId) => !uniqueMemberIds.includes(participantId.toString()),
+  );
+
+  await group.save();
+
+  group = await GroupMessage.findById(group._id)
+    .populate(
+      "participants",
+      "firstName lastName _id email status avatar about",
+    )
+    .populate("creator", "firstName lastName _id email status avatar about");
+
+  return res.status(200).json({
+    status: "success",
+    data: group,
+  });
+});
+
 exports.deleteDirectConversation = catchAsync(async (req, res, next) => {
   const { conversationId } = req.params;
   const { scope } = req.body;

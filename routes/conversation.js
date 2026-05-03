@@ -23,6 +23,11 @@ router.patch(
   conversationController.addGroupParticipants,
 );
 
+router.delete(
+  "/group/:groupId/participants",
+  conversationController.removeGroupParticipants,
+);
+
 router.patch(
   "/:conversationId/messages/:messageId/star",
   conversationController.toggleDirectMessageStar,
