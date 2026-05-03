@@ -58,9 +58,9 @@ const groupConversationSchema = new mongoose.Schema(
       validate: [
         {
           validator: function (value) {
-            return value.length >= 3;
+            return value.length >= 1;
           },
-          message: "Group conversation must have at least 3 participants",
+          message: "Group conversation must have at least 1 participant",
         },
         {
           validator: function (value) {

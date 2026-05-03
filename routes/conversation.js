@@ -13,6 +13,11 @@ router.get(
   conversationController.getGroupConversationMessages,
 );
 
+router.delete(
+  "/group/:groupId/leave",
+  conversationController.leaveGroupConversation,
+);
+
 router.patch(
   "/:conversationId/messages/:messageId/star",
   conversationController.toggleDirectMessageStar,

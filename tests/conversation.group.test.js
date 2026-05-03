@@ -283,3 +283,141 @@ describe("GET /conversation/group", () => {
     });
   });
 });
+
+describe("DELETE /conversation/group/:groupId/leave", () => {
+  it("removes the authenticated user from group participants without deleting messages", async () => {
+    const userA = await createUser({
+      email: "leave-group-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "leave-group-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "leave-group-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Leave Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+      messages: [
+        {
+          from: userB._id,
+          type: "Text",
+          text: "Message should stay",
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete(`/conversation/group/${group._id}/leave`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.data.groupId).toBe(group._id.toString());
+
+    const savedGroup = await GroupMessage.findById(group._id);
+
+    expect(savedGroup).not.toBeNull();
+
+    const participantIds = savedGroup.participants.map((participantId) =>
+      participantId.toString(),
+    );
+
+    expect(participantIds).not.toContain(userA._id.toString());
+    expect(participantIds).toContain(userB._id.toString());
+    expect(participantIds).toContain(userC._id.toString());
+
+    expect(savedGroup.messages).toHaveLength(1);
+    expect(savedGroup.messages[0].text).toBe("Message should stay");
+  });
+
+  it("does not return a group after the authenticated user leaves it", async () => {
+    const userA = await createUser({
+      email: "leave-list-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "leave-list-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "leave-list-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Hidden After Leave",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userA._id);
+
+    await request(app)
+      .delete(`/conversation/group/${group._id}/leave`)
+      .set("Authorization", `Bearer ${token}`);
+
+    const response = await request(app)
+      .get("/conversation/group")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.data).toHaveLength(0);
+  });
+
+  it("does not allow a non-participant to leave a group", async () => {
+    const userA = await createUser({
+      email: "leave-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "leave-member-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "leave-member-c@example.com",
+    });
+
+    const outsider = await createUser({
+      email: "leave-outsider@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Private Leave Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(outsider._id);
+
+    const response = await request(app)
+      .delete(`/conversation/group/${group._id}/leave`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Group conversation not found");
+  });
+
+  it("rejects invalid group conversation id when leaving a group", async () => {
+    const userA = await createUser({
+      email: "leave-invalid@example.com",
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete("/conversation/group/not-valid-id/leave")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Invalid group conversation id");
+  });
+});
