@@ -835,3 +835,201 @@ describe("DELETE /conversation/group/:groupId/participants", () => {
     expect(response.body.message).toBe("Invalid group conversation id");
   });
 });
+
+describe("PATCH /conversation/group/:groupId", () => {
+  it("allows the group creator to update group title", async () => {
+    const userA = await createUser({
+      email: "update-title-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "update-title-member-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "update-title-member-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Old Group Title",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .patch(`/conversation/group/${group._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "  New Group Title  ",
+      });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.data.title).toBe("New Group Title");
+    expect(response.body.data.participants).toHaveLength(3);
+    expect(response.body.data.creator._id).toBe(userA._id.toString());
+
+    const savedGroup = await GroupMessage.findById(group._id);
+
+    expect(savedGroup.title).toBe("New Group Title");
+  });
+
+  it("does not allow a non-creator participant to update group title", async () => {
+    const userA = await createUser({
+      email: "update-title-owner-2@example.com",
+    });
+
+    const userB = await createUser({
+      email: "update-title-member-2@example.com",
+    });
+
+    const userC = await createUser({
+      email: "update-title-member-3@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Creator Only Title",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userB._id);
+
+    const response = await request(app)
+      .patch(`/conversation/group/${group._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Unauthorized Title",
+      });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Only group creator can update group");
+  });
+
+  it("does not allow an outsider to update group title", async () => {
+    const userA = await createUser({
+      email: "update-title-owner-3@example.com",
+    });
+
+    const userB = await createUser({
+      email: "update-title-member-4@example.com",
+    });
+
+    const userC = await createUser({
+      email: "update-title-member-5@example.com",
+    });
+
+    const outsider = await createUser({
+      email: "update-title-outsider@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Private Group Title",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(outsider._id);
+
+    const response = await request(app)
+      .patch(`/conversation/group/${group._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Outsider Title",
+      });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Group conversation not found");
+  });
+
+  it("rejects empty group title", async () => {
+    const userA = await createUser({
+      email: "update-title-empty-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "update-title-empty-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "update-title-empty-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Valid Title",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .patch(`/conversation/group/${group._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "   ",
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Group title is required");
+  });
+
+  it("rejects too long group title", async () => {
+    const userA = await createUser({
+      email: "update-title-long-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "update-title-long-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "update-title-long-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Valid Title",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .patch(`/conversation/group/${group._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "a".repeat(81),
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe(
+      "Group title must be shorter than 80 characters",
+    );
+  });
+
+  it("rejects invalid group conversation id when updating group title", async () => {
+    const userA = await createUser({
+      email: "update-title-invalid-id@example.com",
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .patch("/conversation/group/not-valid-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "New Title",
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Invalid group conversation id");
+  });
+});

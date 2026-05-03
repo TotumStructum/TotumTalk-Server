@@ -28,6 +28,8 @@ router.delete(
   conversationController.removeGroupParticipants,
 );
 
+router.patch("/group/:groupId", conversationController.updateGroupConversation);
+
 router.patch(
   "/:conversationId/messages/:messageId/star",
   conversationController.toggleDirectMessageStar,

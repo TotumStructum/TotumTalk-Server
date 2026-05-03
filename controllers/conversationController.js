@@ -628,6 +628,69 @@ exports.removeGroupParticipants = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.updateGroupConversation = catchAsync(async (req, res, next) => {
+  const { groupId } = req.params;
+  const { title } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(groupId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid group conversation id",
+    });
+  }
+
+  const trimmedTitle = typeof title === "string" ? title.trim() : "";
+
+  if (!trimmedTitle) {
+    return res.status(400).json({
+      status: "error",
+      message: "Group title is required",
+    });
+  }
+
+  if (trimmedTitle.length > 80) {
+    return res.status(400).json({
+      status: "error",
+      message: "Group title must be shorter than 80 characters",
+    });
+  }
+
+  let group = await GroupMessage.findOne({
+    _id: groupId,
+    participants: req.user._id,
+  });
+
+  if (!group) {
+    return res.status(404).json({
+      status: "error",
+      message: "Group conversation not found",
+    });
+  }
+
+  if (group.creator.toString() !== req.user._id.toString()) {
+    return res.status(403).json({
+      status: "error",
+      message: "Only group creator can update group",
+    });
+  }
+
+  group.title = trimmedTitle;
+
+  await group.save();
+
+  group = await GroupMessage.findById(group._id)
+    .populate(
+      "participants",
+      "firstName lastName _id email status avatar about",
+    )
+    .populate("creator", "firstName lastName _id email status avatar about");
+
+  return res.status(200).json({
+    status: "success",
+    data: group,
+  });
+});
+
 exports.deleteDirectConversation = catchAsync(async (req, res, next) => {
   const { conversationId } = req.params;
   const { scope } = req.body;
