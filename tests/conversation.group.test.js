@@ -1033,3 +1033,135 @@ describe("PATCH /conversation/group/:groupId", () => {
     expect(response.body.message).toBe("Invalid group conversation id");
   });
 });
+
+describe("DELETE /conversation/group/:groupId", () => {
+  it("allows the group creator to delete a group", async () => {
+    const userA = await createUser({
+      email: "delete-group-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "delete-group-member-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "delete-group-member-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Delete Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+      messages: [
+        {
+          from: userB._id,
+          type: "Text",
+          text: "This message should be deleted with the group",
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete(`/conversation/group/${group._id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.data.groupId).toBe(group._id.toString());
+    expect(response.body.message).toBe("Group deleted");
+
+    const deletedGroup = await GroupMessage.findById(group._id);
+
+    expect(deletedGroup).toBeNull();
+  });
+
+  it("does not allow a non-creator participant to delete a group", async () => {
+    const userA = await createUser({
+      email: "delete-group-owner-2@example.com",
+    });
+
+    const userB = await createUser({
+      email: "delete-group-member-2@example.com",
+    });
+
+    const userC = await createUser({
+      email: "delete-group-member-3@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Creator Delete Only",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userB._id);
+
+    const response = await request(app)
+      .delete(`/conversation/group/${group._id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(403);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Only group creator can delete group");
+
+    const savedGroup = await GroupMessage.findById(group._id);
+
+    expect(savedGroup).not.toBeNull();
+  });
+
+  it("does not allow an outsider to delete a group", async () => {
+    const userA = await createUser({
+      email: "delete-group-owner-3@example.com",
+    });
+
+    const userB = await createUser({
+      email: "delete-group-member-4@example.com",
+    });
+
+    const userC = await createUser({
+      email: "delete-group-member-5@example.com",
+    });
+
+    const outsider = await createUser({
+      email: "delete-group-outsider@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Private Delete Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(outsider._id);
+
+    const response = await request(app)
+      .delete(`/conversation/group/${group._id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Group conversation not found");
+
+    const savedGroup = await GroupMessage.findById(group._id);
+
+    expect(savedGroup).not.toBeNull();
+  });
+
+  it("rejects invalid group conversation id when deleting a group", async () => {
+    const userA = await createUser({
+      email: "delete-group-invalid-id@example.com",
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete("/conversation/group/not-valid-id")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Invalid group conversation id");
+  });
+});

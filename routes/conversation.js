@@ -30,6 +30,11 @@ router.delete(
 
 router.patch("/group/:groupId", conversationController.updateGroupConversation);
 
+router.delete(
+  "/group/:groupId",
+  conversationController.deleteGroupConversation,
+);
+
 router.patch(
   "/:conversationId/messages/:messageId/star",
   conversationController.toggleDirectMessageStar,

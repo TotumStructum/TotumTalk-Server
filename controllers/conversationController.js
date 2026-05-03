@@ -691,6 +691,46 @@ exports.updateGroupConversation = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.deleteGroupConversation = catchAsync(async (req, res, next) => {
+  const { groupId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(groupId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid group conversation id",
+    });
+  }
+
+  const group = await GroupMessage.findOne({
+    _id: groupId,
+    participants: req.user._id,
+  });
+
+  if (!group) {
+    return res.status(404).json({
+      status: "error",
+      message: "Group conversation not found",
+    });
+  }
+
+  if (group.creator.toString() !== req.user._id.toString()) {
+    return res.status(403).json({
+      status: "error",
+      message: "Only group creator can delete group",
+    });
+  }
+
+  await GroupMessage.findByIdAndDelete(groupId);
+
+  return res.status(200).json({
+    status: "success",
+    data: {
+      groupId,
+    },
+    message: "Group deleted",
+  });
+});
+
 exports.deleteDirectConversation = catchAsync(async (req, res, next) => {
   const { conversationId } = req.params;
   const { scope } = req.body;
