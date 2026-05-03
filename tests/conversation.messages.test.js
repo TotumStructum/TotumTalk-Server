@@ -147,6 +147,48 @@ describe("GET /conversation/:conversationId/messages", () => {
     expect(response.body.status).toBe("error");
     expect(response.body.message).toBe("Conversation not found");
   });
+
+  it("does not return messages deleted for the authenticated user", async () => {
+    const userA = await createUser({
+      email: "deleted-message-for-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "deleted-message-for-b@example.com",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Hidden for A",
+          deletedFor: [userA._id],
+          created_at: new Date(),
+        },
+        {
+          to: userA._id,
+          from: userB._id,
+          type: "Text",
+          text: "Visible for A",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .get(`/conversation/${conversation._id}/messages`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0].text).toBe("Visible for A");
+  });
 });
 
 describe("PATCH /conversation/:conversationId/messages/:messageId/star", () => {
@@ -298,6 +340,43 @@ describe("PATCH /conversation/:conversationId/messages/:messageId/star", () => {
     const response = await request(app)
       .patch(
         `/conversation/${conversation._id}/messages/${missingMessageId}/star`,
+      )
+      .set("Authorization", `Bearer ${token}`)
+      .send({ starred: true });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Message not found");
+  });
+
+  it("does not allow starring a message deleted for the authenticated user", async () => {
+    const userA = await createUser({
+      email: "star-deleted-message-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "star-deleted-message-b@example.com",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Deleted starred message",
+          deletedFor: [userA._id],
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .patch(
+        `/conversation/${conversation._id}/messages/${conversation.messages[0]._id}/star`,
       )
       .set("Authorization", `Bearer ${token}`)
       .send({ starred: true });
@@ -492,5 +571,167 @@ describe("DELETE /conversation/:conversationId", () => {
     expect(response.statusCode).toBe(400);
     expect(response.body.status).toBe("error");
     expect(response.body.message).toBe("Invalid conversation id");
+  });
+
+  describe("DELETE /conversation/:conversationId/messages/:messageId", () => {
+    it("deletes a direct message only for the authenticated user", async () => {
+      const userA = await createUser({
+        email: "delete-message-a@example.com",
+      });
+
+      const userB = await createUser({
+        email: "delete-message-b@example.com",
+      });
+
+      const conversation = await OneToOneMessage.create({
+        participants: [userA._id, userB._id],
+        messages: [
+          {
+            to: userB._id,
+            from: userA._id,
+            type: "Text",
+            text: "Delete this message",
+            starredBy: [userA._id],
+            created_at: new Date(),
+          },
+        ],
+      });
+
+      const messageId = conversation.messages[0]._id;
+      const token = signToken(userA._id);
+
+      const response = await request(app)
+        .delete(`/conversation/${conversation._id}/messages/${messageId}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body.status).toBe("success");
+      expect(response.body.message).toBe("Message deleted for you");
+      expect(response.body.data.messageId).toBe(messageId.toString());
+
+      const updatedConversation = await OneToOneMessage.findById(
+        conversation._id,
+      );
+
+      const updatedMessage = updatedConversation.messages.id(messageId);
+
+      expect(updatedMessage.deletedFor.map((id) => id.toString())).toContain(
+        userA._id.toString(),
+      );
+      expect(
+        updatedMessage.deletedFor.map((id) => id.toString()),
+      ).not.toContain(userB._id.toString());
+      expect(updatedMessage.starredBy.map((id) => id.toString())).not.toContain(
+        userA._id.toString(),
+      );
+    });
+
+    it("does not allow a user outside the conversation to delete a message", async () => {
+      const userA = await createUser({
+        email: "delete-message-private-a@example.com",
+      });
+
+      const userB = await createUser({
+        email: "delete-message-private-b@example.com",
+      });
+
+      const outsider = await createUser({
+        email: "delete-message-private-outsider@example.com",
+      });
+
+      const conversation = await OneToOneMessage.create({
+        participants: [userA._id, userB._id],
+        messages: [
+          {
+            to: userB._id,
+            from: userA._id,
+            type: "Text",
+            text: "Private delete message",
+            created_at: new Date(),
+          },
+        ],
+      });
+
+      const token = signToken(outsider._id);
+
+      const response = await request(app)
+        .delete(
+          `/conversation/${conversation._id}/messages/${conversation.messages[0]._id}`,
+        )
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.statusCode).toBe(404);
+      expect(response.body.status).toBe("error");
+      expect(response.body.message).toBe("Conversation not found");
+    });
+
+    it("returns 404 when deleting a missing message", async () => {
+      const userA = await createUser({
+        email: "delete-missing-message-a@example.com",
+      });
+
+      const userB = await createUser({
+        email: "delete-missing-message-b@example.com",
+      });
+
+      const conversation = await OneToOneMessage.create({
+        participants: [userA._id, userB._id],
+        messages: [],
+      });
+
+      const token = signToken(userA._id);
+      const missingMessageId = userB._id;
+
+      const response = await request(app)
+        .delete(
+          `/conversation/${conversation._id}/messages/${missingMessageId}`,
+        )
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.statusCode).toBe(404);
+      expect(response.body.status).toBe("error");
+      expect(response.body.message).toBe("Message not found");
+    });
+
+    it("rejects invalid message id when deleting", async () => {
+      const userA = await createUser({
+        email: "delete-invalid-message-id-a@example.com",
+      });
+
+      const userB = await createUser({
+        email: "delete-invalid-message-id-b@example.com",
+      });
+
+      const conversation = await OneToOneMessage.create({
+        participants: [userA._id, userB._id],
+        messages: [],
+      });
+
+      const token = signToken(userA._id);
+
+      const response = await request(app)
+        .delete(`/conversation/${conversation._id}/messages/invalid-id`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.statusCode).toBe(400);
+      expect(response.body.status).toBe("error");
+      expect(response.body.message).toBe("Invalid message id");
+    });
+
+    it("rejects invalid conversation id when deleting a message", async () => {
+      const userA = await createUser({
+        email: "delete-invalid-message-conversation-id@example.com",
+      });
+
+      const token = signToken(userA._id);
+
+      const response = await request(app)
+        .delete("/conversation/invalid-id/messages/invalid-message-id")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.statusCode).toBe(400);
+      expect(response.body.status).toBe("error");
+      expect(response.body.message).toBe("Invalid conversation id");
+    });
   });
 });

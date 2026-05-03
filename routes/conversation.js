@@ -19,6 +19,11 @@ router.patch(
 );
 
 router.delete(
+  "/:conversationId/messages/:messageId",
+  conversationController.deleteDirectMessageForMe,
+);
+
+router.delete(
   "/:conversationId",
   conversationController.deleteDirectConversation,
 );

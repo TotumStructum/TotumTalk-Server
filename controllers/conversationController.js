@@ -44,9 +44,19 @@ exports.getConversationMessages = catchAsync(async (req, res, next) => {
     });
   }
 
+  const currentUserId = req.user._id.toString();
+
+  const visibleMessages = conversation.messages.filter((message) => {
+    const deletedFor = Array.isArray(message.deletedFor)
+      ? message.deletedFor
+      : [];
+
+    return !deletedFor.some((userId) => userId.toString() === currentUserId);
+  });
+
   return res.status(200).json({
     status: "success",
-    data: conversation.messages,
+    data: visibleMessages,
   });
 });
 
@@ -98,6 +108,18 @@ exports.toggleDirectMessageStar = catchAsync(async (req, res, next) => {
   }
 
   const currentUserId = req.user._id.toString();
+
+  const isDeletedForCurrentUser = Array.isArray(message.deletedFor)
+    ? message.deletedFor.some((userId) => userId.toString() === currentUserId)
+    : false;
+
+  if (isDeletedForCurrentUser) {
+    return res.status(404).json({
+      status: "error",
+      message: "Message not found",
+    });
+  }
+
   const starredBy = Array.isArray(message.starredBy) ? message.starredBy : [];
 
   const alreadyStarred = starredBy.some(
@@ -120,6 +142,70 @@ exports.toggleDirectMessageStar = catchAsync(async (req, res, next) => {
     status: "success",
     data: message,
     message: starred ? "Message starred" : "Message unstarred",
+  });
+});
+
+exports.deleteDirectMessageForMe = catchAsync(async (req, res, next) => {
+  const { conversationId, messageId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid conversation id",
+    });
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(messageId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid message id",
+    });
+  }
+
+  const conversation = await OneToOneMessage.findOne({
+    _id: conversationId,
+    participants: req.user._id,
+    deletedBy: { $ne: req.user._id },
+  });
+
+  if (!conversation) {
+    return res.status(404).json({
+      status: "error",
+      message: "Conversation not found",
+    });
+  }
+
+  const message = conversation.messages.id(messageId);
+
+  if (!message) {
+    return res.status(404).json({
+      status: "error",
+      message: "Message not found",
+    });
+  }
+
+  const currentUserId = req.user._id.toString();
+
+  const alreadyDeleted = Array.isArray(message.deletedFor)
+    ? message.deletedFor.some((userId) => userId.toString() === currentUserId)
+    : false;
+
+  if (!alreadyDeleted) {
+    message.deletedFor.push(req.user._id);
+  }
+
+  message.starredBy = Array.isArray(message.starredBy)
+    ? message.starredBy.filter((userId) => userId.toString() !== currentUserId)
+    : [];
+
+  await conversation.save();
+
+  return res.status(200).json({
+    status: "success",
+    data: {
+      messageId,
+    },
+    message: "Message deleted for you",
   });
 });
 
