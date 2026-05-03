@@ -19,6 +19,11 @@ router.delete(
 );
 
 router.patch(
+  "/group/:groupId/participants",
+  conversationController.addGroupParticipants,
+);
+
+router.patch(
   "/:conversationId/messages/:messageId/star",
   conversationController.toggleDirectMessageStar,
 );

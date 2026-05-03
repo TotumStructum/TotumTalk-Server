@@ -421,3 +421,203 @@ describe("DELETE /conversation/group/:groupId/leave", () => {
     expect(response.body.message).toBe("Invalid group conversation id");
   });
 });
+
+describe("PATCH /conversation/group/:groupId/participants", () => {
+  it("allows the group creator to add friend participants", async () => {
+    const userA = await createUser({
+      email: "add-group-owner@example.com",
+      firstName: "Owner",
+    });
+
+    const userB = await createUser({
+      email: "add-group-member-b@example.com",
+      firstName: "Member",
+      lastName: "B",
+    });
+
+    const userC = await createUser({
+      email: "add-group-member-c@example.com",
+      firstName: "Member",
+      lastName: "C",
+    });
+
+    const userD = await createUser({
+      email: "add-group-member-d@example.com",
+      firstName: "Member",
+      lastName: "D",
+    });
+
+    userA.friends = [userB._id, userC._id, userD._id];
+    await userA.save({ validateModifiedOnly: true });
+
+    const group = await GroupMessage.create({
+      title: "Add Members Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .patch(`/conversation/group/${group._id}/participants`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        members: [userD._id.toString()],
+      });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.data.participants).toHaveLength(4);
+
+    const participantIds = response.body.data.participants.map((participant) =>
+      participant._id.toString(),
+    );
+
+    expect(participantIds).toContain(userA._id.toString());
+    expect(participantIds).toContain(userB._id.toString());
+    expect(participantIds).toContain(userC._id.toString());
+    expect(participantIds).toContain(userD._id.toString());
+
+    const savedGroup = await GroupMessage.findById(group._id);
+
+    expect(savedGroup.participants.map((id) => id.toString())).toContain(
+      userD._id.toString(),
+    );
+  });
+
+  it("does not allow a non-creator participant to add members", async () => {
+    const userA = await createUser({
+      email: "add-non-creator-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "add-non-creator-member@example.com",
+    });
+
+    const userC = await createUser({
+      email: "add-non-creator-member-c@example.com",
+    });
+
+    const userD = await createUser({
+      email: "add-non-creator-new@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Creator Only Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userB._id);
+
+    const response = await request(app)
+      .patch(`/conversation/group/${group._id}/participants`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        members: [userD._id.toString()],
+      });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe(
+      "Only group creator can add participants",
+    );
+  });
+
+  it("does not add existing group participants again", async () => {
+    const userA = await createUser({
+      email: "add-existing-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "add-existing-member-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "add-existing-member-c@example.com",
+    });
+
+    userA.friends = [userB._id, userC._id];
+    await userA.save({ validateModifiedOnly: true });
+
+    const group = await GroupMessage.create({
+      title: "No Duplicate Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .patch(`/conversation/group/${group._id}/participants`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        members: [userB._id.toString()],
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe(
+      "One or more users are already group participants",
+    );
+  });
+
+  it("does not add users who are not friends with the creator", async () => {
+    const userA = await createUser({
+      email: "add-non-friend-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "add-non-friend-member-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "add-non-friend-member-c@example.com",
+    });
+
+    const stranger = await createUser({
+      email: "add-non-friend-stranger@example.com",
+    });
+
+    userA.friends = [userB._id, userC._id];
+    await userA.save({ validateModifiedOnly: true });
+
+    const group = await GroupMessage.create({
+      title: "Friends Only Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .patch(`/conversation/group/${group._id}/participants`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        members: [stranger._id.toString()],
+      });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("You can add only friends to groups");
+  });
+
+  it("rejects invalid group conversation id when adding participants", async () => {
+    const userA = await createUser({
+      email: "add-invalid-group-id@example.com",
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .patch("/conversation/group/not-valid-id/participants")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        members: [],
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Invalid group conversation id");
+  });
+});

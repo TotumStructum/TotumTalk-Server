@@ -394,6 +394,129 @@ exports.leaveGroupConversation = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.addGroupParticipants = catchAsync(async (req, res, next) => {
+  const { groupId } = req.params;
+  const { members } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(groupId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid group conversation id",
+    });
+  }
+
+  if (!Array.isArray(members)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Group members are required",
+    });
+  }
+
+  const uniqueMemberIds = [
+    ...new Set(members.map((memberId) => memberId?.toString()).filter(Boolean)),
+  ];
+
+  if (uniqueMemberIds.length === 0) {
+    return res.status(400).json({
+      status: "error",
+      message: "Group members are required",
+    });
+  }
+
+  const currentUserId = req.user._id.toString();
+
+  if (uniqueMemberIds.includes(currentUserId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Do not include yourself in group members",
+    });
+  }
+
+  const hasInvalidMemberId = uniqueMemberIds.some(
+    (memberId) => !mongoose.Types.ObjectId.isValid(memberId),
+  );
+
+  if (hasInvalidMemberId) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid group member id",
+    });
+  }
+
+  let group = await GroupMessage.findOne({
+    _id: groupId,
+    participants: req.user._id,
+  });
+
+  if (!group) {
+    return res.status(404).json({
+      status: "error",
+      message: "Group conversation not found",
+    });
+  }
+
+  if (group.creator.toString() !== currentUserId) {
+    return res.status(403).json({
+      status: "error",
+      message: "Only group creator can add participants",
+    });
+  }
+
+  const existingParticipantIds = group.participants.map((participantId) =>
+    participantId.toString(),
+  );
+
+  const hasExistingParticipant = uniqueMemberIds.some((memberId) =>
+    existingParticipantIds.includes(memberId),
+  );
+
+  if (hasExistingParticipant) {
+    return res.status(400).json({
+      status: "error",
+      message: "One or more users are already group participants",
+    });
+  }
+
+  const existingMembersCount = await User.countDocuments({
+    _id: { $in: uniqueMemberIds },
+  });
+
+  if (existingMembersCount !== uniqueMemberIds.length) {
+    return res.status(404).json({
+      status: "error",
+      message: "One or more group members were not found",
+    });
+  }
+
+  const friendIds = req.user.friends.map((friendId) => friendId.toString());
+  const allMembersAreFriends = uniqueMemberIds.every((memberId) =>
+    friendIds.includes(memberId),
+  );
+
+  if (!allMembersAreFriends) {
+    return res.status(403).json({
+      status: "error",
+      message: "You can add only friends to groups",
+    });
+  }
+
+  group.participants.push(...uniqueMemberIds);
+
+  await group.save();
+
+  group = await GroupMessage.findById(group._id)
+    .populate(
+      "participants",
+      "firstName lastName _id email status avatar about",
+    )
+    .populate("creator", "firstName lastName _id email status avatar about");
+
+  return res.status(200).json({
+    status: "success",
+    data: group,
+  });
+});
+
 exports.deleteDirectConversation = catchAsync(async (req, res, next) => {
   const { conversationId } = req.params;
   const { scope } = req.body;
