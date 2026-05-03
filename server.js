@@ -19,6 +19,9 @@ const {
   cancelFriendRequest,
 } = require("./services/friendRequestService");
 const { removeFriend } = require("./services/friendshipService");
+const {
+  buildDirectReplySnapshot,
+} = require("./services/directMessageReplyService");
 
 const server = http.createServer(app);
 
@@ -442,7 +445,7 @@ io.on("connection", async (socket) => {
 
   socket.on(
     "text_message",
-    async ({ to, message, conversation_id, type } = {}) => {
+    async ({ to, message, conversation_id, type, reply_to } = {}) => {
       const from = socket.userId;
 
       if (!to || !from || !message || !conversation_id || !type) {
@@ -511,12 +514,33 @@ io.on("connection", async (socket) => {
         return;
       }
 
-      chat.messages.push({
+      let replyTo = null;
+
+      try {
+        replyTo = buildDirectReplySnapshot({
+          conversation: chat,
+          replyToMessageId: reply_to,
+          userId: from,
+        });
+      } catch (error) {
+        io.to(socket.id).emit("message_error", {
+          message: error.message || "Failed to reply to message",
+        });
+        return;
+      }
+
+      const newMessage = {
         to,
         from,
         type,
         text: trimmedMessage,
-      });
+      };
+
+      if (replyTo) {
+        newMessage.replyTo = replyTo;
+      }
+
+      chat.messages.push(newMessage);
 
       await chat.save();
 
@@ -588,7 +612,7 @@ io.on("connection", async (socket) => {
 
   socket.on(
     "file_message",
-    async ({ to, conversation_id, file, type, text = "" } = {}) => {
+    async ({ to, conversation_id, file, type, text = "", reply_to } = {}) => {
       const from = socket.userId;
 
       if (!to || !from || !conversation_id || !file || !type) {
@@ -656,6 +680,21 @@ io.on("connection", async (socket) => {
         return;
       }
 
+      let replyTo = null;
+
+      try {
+        replyTo = buildDirectReplySnapshot({
+          conversation: chat,
+          replyToMessageId: reply_to,
+          userId: from,
+        });
+      } catch (error) {
+        io.to(socket.id).emit("message_error", {
+          message: error.message || "Failed to reply to message",
+        });
+        return;
+      }
+
       const newMessage = {
         to,
         from,
@@ -665,6 +704,10 @@ io.on("connection", async (socket) => {
 
       if (messageText) {
         newMessage.text = messageText;
+      }
+
+      if (replyTo) {
+        newMessage.replyTo = replyTo;
       }
 
       chat.messages.push(newMessage);

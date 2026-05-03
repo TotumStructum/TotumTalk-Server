@@ -189,6 +189,60 @@ describe("GET /conversation/:conversationId/messages", () => {
     expect(response.body.data).toHaveLength(1);
     expect(response.body.data[0].text).toBe("Visible for A");
   });
+
+  it("returns direct message reply snapshots in conversation history", async () => {
+    const userA = await createUser({
+      email: "reply-history-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "reply-history-b@example.com",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Original direct message",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    conversation.messages.push({
+      to: userA._id,
+      from: userB._id,
+      type: "Text",
+      text: "Reply direct message",
+      replyTo: {
+        messageId: conversation.messages[0]._id,
+        from: userA._id,
+        type: "Text",
+        text: "Original direct message",
+        file: "",
+      },
+      created_at: new Date(),
+    });
+
+    await conversation.save();
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .get(`/conversation/${conversation._id}/messages`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.data).toHaveLength(2);
+    expect(response.body.data[1].text).toBe("Reply direct message");
+    expect(response.body.data[1].replyTo.text).toBe("Original direct message");
+    expect(response.body.data[1].replyTo.type).toBe("Text");
+    expect(response.body.data[1].replyTo.from).toBe(userA._id.toString());
+  });
 });
 
 describe("PATCH /conversation/:conversationId/messages/:messageId/star", () => {
