@@ -22,6 +22,9 @@ const { removeFriend } = require("./services/friendshipService");
 const {
   buildDirectReplySnapshot,
 } = require("./services/directMessageReplyService");
+const {
+  forwardDirectMessage,
+} = require("./services/directMessageForwardService");
 
 const server = http.createServer(app);
 
@@ -605,6 +608,37 @@ io.on("connection", async (socket) => {
       } catch (error) {
         io.to(socket.id).emit("message_error", {
           message: error.message || "Failed to send group file message",
+        });
+      }
+    },
+  );
+
+  socket.on(
+    "forward_message",
+    async ({
+      source_conversation_id,
+      message_id,
+      target_conversation_id,
+    } = {}) => {
+      try {
+        const result = await forwardDirectMessage({
+          userId: socket.userId,
+          sourceConversationId: source_conversation_id,
+          messageId: message_id,
+          targetConversationId: target_conversation_id,
+        });
+
+        result.recipients.forEach((recipient) => {
+          if (!recipient.socket_id) return;
+
+          io.to(recipient.socket_id).emit("new_message", {
+            conversation_id: target_conversation_id,
+            message: result.message,
+          });
+        });
+      } catch (error) {
+        io.to(socket.id).emit("message_error", {
+          message: error.message || "Failed to forward message",
         });
       }
     },
