@@ -788,4 +788,47 @@ describe("DELETE /conversation/:conversationId", () => {
       expect(response.body.message).toBe("Invalid conversation id");
     });
   });
+
+  it("does not allow deleting a system direct conversation", async () => {
+    const userA = await createUser({
+      email: "delete-system-conversation-user@example.com",
+    });
+
+    const totumAIUser = await createUser({
+      email: "delete-system-conversation-ai@example.com",
+      firstName: "TotumAI",
+      lastName: "Assistant",
+      isAI: true,
+      isSystem: true,
+      systemKey: "TEST_TOTUM_AI_DIRECT_DELETE",
+    });
+
+    const conversation = await OneToOneMessage.create({
+      participants: [userA._id, totumAIUser._id],
+      messages: [
+        {
+          to: totumAIUser._id,
+          from: userA._id,
+          type: "Text",
+          text: "Hello TotumAI",
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .delete(`/conversation/${conversation._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ scope: "me" });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("System conversation cannot be deleted");
+
+    const savedConversation = await OneToOneMessage.findById(conversation._id);
+
+    expect(savedConversation).not.toBeNull();
+    expect(savedConversation.deletedBy).toHaveLength(0);
+  });
 });

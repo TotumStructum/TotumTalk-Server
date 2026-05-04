@@ -25,12 +25,16 @@ exports.removeFriend = async ({ userId, friendId }) => {
   }
 
   const [user, friend] = await Promise.all([
-    User.findById(userId).select("_id friends socket_id"),
-    User.findById(friendId).select("_id friends socket_id"),
+    User.findById(userId).select("_id friends socket_id isSystem"),
+    User.findById(friendId).select("_id friends socket_id isSystem"),
   ]);
 
   if (!user || !friend) {
     throw createServiceError("User not found", 404);
+  }
+
+  if (friend.isSystem) {
+    throw createServiceError("System contact cannot be removed", 400);
   }
 
   const userHasFriend = user.friends.some(

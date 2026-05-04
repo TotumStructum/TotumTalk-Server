@@ -118,6 +118,44 @@ describe("POST /conversation/group", () => {
       "Group must have at least 2 members besides you",
     );
   });
+
+  it("does not allow creating a group with TotumAI system contact", async () => {
+    const userA = await createUser({
+      email: "group-system-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "group-system-friend@example.com",
+    });
+
+    const totumAIUser = await createUser({
+      email: "group-system-ai@example.com",
+      firstName: "TotumAI",
+      lastName: "Assistant",
+      isAI: true,
+      isSystem: true,
+      systemKey: "TEST_TOTUM_AI_GROUP_CREATE",
+    });
+
+    userA.friends = [userB._id, totumAIUser._id];
+    await userA.save({ validateModifiedOnly: true });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .post("/conversation/group")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Group With AI",
+        members: [userB._id.toString(), totumAIUser._id.toString()],
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe(
+      "System contacts cannot be added to groups",
+    );
+  });
 });
 
 describe("GET /conversation/group", () => {
@@ -619,6 +657,59 @@ describe("PATCH /conversation/group/:groupId/participants", () => {
     expect(response.statusCode).toBe(400);
     expect(response.body.status).toBe("error");
     expect(response.body.message).toBe("Invalid group conversation id");
+  });
+
+  it("does not allow adding TotumAI system contact to an existing group", async () => {
+    const userA = await createUser({
+      email: "add-system-owner@example.com",
+    });
+
+    const userB = await createUser({
+      email: "add-system-member-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "add-system-member-c@example.com",
+    });
+
+    const totumAIUser = await createUser({
+      email: "add-system-ai@example.com",
+      firstName: "TotumAI",
+      lastName: "Assistant",
+      isAI: true,
+      isSystem: true,
+      systemKey: "TEST_TOTUM_AI_GROUP_ADD",
+    });
+
+    userA.friends = [userB._id, userC._id, totumAIUser._id];
+    await userA.save({ validateModifiedOnly: true });
+
+    const group = await GroupMessage.create({
+      title: "No AI Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .patch(`/conversation/group/${group._id}/participants`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        members: [totumAIUser._id.toString()],
+      });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe(
+      "System contacts cannot be added to groups",
+    );
+
+    const savedGroup = await GroupMessage.findById(group._id);
+
+    expect(savedGroup.participants.map((id) => id.toString())).not.toContain(
+      totumAIUser._id.toString(),
+    );
   });
 });
 

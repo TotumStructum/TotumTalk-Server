@@ -276,6 +276,18 @@ exports.createGroupConversation = catchAsync(async (req, res, next) => {
     });
   }
 
+  const systemMembersCount = await User.countDocuments({
+    _id: { $in: uniqueMemberIds },
+    isSystem: true,
+  });
+
+  if (systemMembersCount > 0) {
+    return res.status(400).json({
+      status: "error",
+      message: "System contacts cannot be added to groups",
+    });
+  }
+
   const friendIds = req.user.friends.map((friendId) => friendId.toString());
   const allMembersAreFriends = uniqueMemberIds.every((memberId) =>
     friendIds.includes(memberId),
@@ -485,6 +497,18 @@ exports.addGroupParticipants = catchAsync(async (req, res, next) => {
     return res.status(404).json({
       status: "error",
       message: "One or more group members were not found",
+    });
+  }
+
+  const systemMembersCount = await User.countDocuments({
+    _id: { $in: uniqueMemberIds },
+    isSystem: true,
+  });
+
+  if (systemMembersCount > 0) {
+    return res.status(400).json({
+      status: "error",
+      message: "System contacts cannot be added to groups",
     });
   }
 
@@ -758,6 +782,18 @@ exports.deleteDirectConversation = catchAsync(async (req, res, next) => {
     return res.status(404).json({
       status: "error",
       message: "Conversation not found",
+    });
+  }
+
+  const hasSystemParticipant = await User.exists({
+    _id: { $in: conversation.participants },
+    isSystem: true,
+  });
+
+  if (hasSystemParticipant) {
+    return res.status(400).json({
+      status: "error",
+      message: "System conversation cannot be deleted",
     });
   }
 

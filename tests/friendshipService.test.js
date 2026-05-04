@@ -141,4 +141,49 @@ describe("removeFriend", () => {
       }),
     ).rejects.toThrow("User not found");
   });
+
+  it("does not allow removing TotumAI system contact", async () => {
+    const userA = await createUser({
+      email: "remove-system-contact-user@example.com",
+    });
+
+    const totumAIUser = await createUser({
+      email: "remove-system-contact-ai@example.com",
+      firstName: "TotumAI",
+      lastName: "Assistant",
+      isAI: true,
+      isSystem: true,
+      systemKey: "TEST_TOTUM_AI_REMOVE",
+    });
+
+    userA.friends.push(totumAIUser._id);
+    totumAIUser.friends.push(userA._id);
+
+    await Promise.all([
+      userA.save({ validateModifiedOnly: true }),
+      totumAIUser.save({ validateModifiedOnly: true }),
+    ]);
+
+    await expect(
+      removeFriend({
+        userId: userA._id,
+        friendId: totumAIUser._id,
+      }),
+    ).rejects.toThrow("System contact cannot be removed");
+
+    const updatedUserA = await User.findById(userA._id);
+    const updatedTotumAIUser = await User.findById(totumAIUser._id);
+
+    expect(
+      updatedUserA.friends.some(
+        (friendId) => friendId.toString() === totumAIUser._id.toString(),
+      ),
+    ).toBe(true);
+
+    expect(
+      updatedTotumAIUser.friends.some(
+        (friendId) => friendId.toString() === userA._id.toString(),
+      ),
+    ).toBe(true);
+  });
 });

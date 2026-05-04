@@ -2,7 +2,10 @@ const request = require("supertest");
 const app = require("../app");
 const User = require("../models/user");
 const OneToOneMessage = require("../models/OneToOneMessage");
-const { TOTUM_AI_SYSTEM_KEY } = require("../services/totumAIService");
+const {
+  TOTUM_AI_SYSTEM_KEY,
+  ensureTotumAIContactForUser,
+} = require("../services/totumAIService");
 
 const createUser = async (overrides = {}) => {
   return await User.create({
@@ -82,6 +85,9 @@ describe("POST /auth/verify", () => {
       email: "verify-ai-idempotent@example.com",
       otp: "123123",
     });
+
+    await ensureTotumAIContactForUser(user._id);
+    await ensureTotumAIContactForUser(user._id);
 
     const totumAIUser = await User.findOne({
       systemKey: TOTUM_AI_SYSTEM_KEY,
