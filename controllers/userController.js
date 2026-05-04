@@ -68,8 +68,9 @@ exports.getUser = catchAsync(async (req, res, next) => {
 
   const remaining_users = await User.find({
     verified: true,
+    isSystem: { $ne: true },
     _id: { $nin: Array.from(excludedUserIds) },
-  }).select("_id firstName lastName avatar status");
+  }).select("_id firstName lastName avatar status isAI isSystem");
 
   res.status(200).json({
     status: "success",
@@ -109,7 +110,7 @@ exports.getSentRequests = catchAsync(async (req, res, next) => {
 exports.getFriends = catchAsync(async (req, res, next) => {
   const this_user = await User.findById(req.user._id).populate(
     "friends",
-    "_id firstName lastName avatar status ",
+    "_id firstName lastName avatar status isAI isSystem",
   );
 
   if (!this_user) {
@@ -128,7 +129,7 @@ exports.getFriends = catchAsync(async (req, res, next) => {
 
 exports.getMe = catchAsync(async (req, res, next) => {
   const user = await User.findById(req.user._id).select(
-    "_id firstName lastName email about avatar status",
+    "_id firstName lastName email about avatar status isAI isSystem",
   );
 
   if (!user) {

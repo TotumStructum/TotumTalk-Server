@@ -11,7 +11,7 @@ exports.getDirectConversations = catchAsync(async (req, res, next) => {
   })
     .populate(
       "participants",
-      "firstName lastName _id email status avatar about",
+      "firstName lastName _id email status avatar about isAI isSystem",
     )
     .sort({ updatedAt: -1 });
 

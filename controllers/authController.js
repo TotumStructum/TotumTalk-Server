@@ -8,6 +8,7 @@ const mailService = require("../services/mailer");
 const otp = require("../templates/mail/otp");
 const resetPassword = require("../templates/mail/resetPassword");
 const catchAsync = require("../utils/catchAsync");
+const totumAIService = require("../services/totumAIService");
 
 const signToken = (userId) =>
   jwt.sign(
@@ -174,6 +175,8 @@ exports.verifyOTP = catchAsync(async (req, res, next) => {
   user.otp_expiry_time = undefined;
 
   await user.save({ validateModifiedOnly: true });
+
+  await totumAIService.ensureTotumAIContactForUser(user._id);
 
   const token = signToken(user._id);
 

@@ -37,20 +37,29 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, "Password is required"],
+      required: [
+        function () {
+          return !this.isSystem;
+        },
+        "Password is required",
+      ],
       select: false,
     },
     passwordConfirm: {
       type: String,
       required: [
         function () {
+          if (this.isSystem) return false;
+
           return this.isNew || this.isModified("password");
         },
         "Password confirm is required",
       ],
       validate: {
         validator: function (el) {
+          if (this.isSystem) return true;
           if (!(this.isNew || this.isModified("password"))) return true;
+
           return el === this.password;
         },
         message: "Passwords are not the same!",
@@ -74,6 +83,19 @@ const userSchema = new mongoose.Schema(
     verified: {
       type: Boolean,
       default: false,
+    },
+    isAI: {
+      type: Boolean,
+      default: false,
+    },
+    isSystem: {
+      type: Boolean,
+      default: false,
+    },
+    systemKey: {
+      type: String,
+      unique: true,
+      sparse: true,
     },
     otp: {
       type: String,
