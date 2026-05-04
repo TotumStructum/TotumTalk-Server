@@ -25,6 +25,9 @@ const {
 const {
   forwardDirectMessage,
 } = require("./services/directMessageForwardService");
+const {
+  createTotumAIAutoReply,
+} = require("./services/totumAIAutoReplyService");
 
 const server = http.createServer(app);
 
@@ -549,15 +552,41 @@ io.on("connection", async (socket) => {
 
       const saved_message = chat.messages[chat.messages.length - 1];
 
-      io.to(to_user.socket_id).emit("new_message", {
-        conversation_id,
-        message: saved_message,
-      });
+      if (to_user.socket_id) {
+        io.to(to_user.socket_id).emit("new_message", {
+          conversation_id,
+          message: saved_message,
+        });
+      }
 
-      io.to(from_user.socket_id).emit("new_message", {
-        conversation_id,
-        message: saved_message,
-      });
+      if (from_user.socket_id) {
+        io.to(from_user.socket_id).emit("new_message", {
+          conversation_id,
+          message: saved_message,
+        });
+      }
+
+      if (to_user.isSystem && to_user.isAI) {
+        try {
+          const aiReply = await createTotumAIAutoReply({
+            conversation: chat,
+            userId: from,
+            totumAIUserId: to,
+            message: trimmedMessage,
+          });
+
+          if (from_user.socket_id) {
+            io.to(from_user.socket_id).emit("new_message", {
+              conversation_id,
+              message: aiReply.message,
+            });
+          }
+        } catch (error) {
+          io.to(socket.id).emit("message_error", {
+            message: "Failed to generate TotumAI reply",
+          });
+        }
+      }
     },
   );
 
