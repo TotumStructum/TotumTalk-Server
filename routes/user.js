@@ -23,4 +23,12 @@ router.get(
   userController.getSentRequests,
 );
 
+router.post("/block/:userId", authController.protect, userController.blockUser);
+
+router.delete(
+  "/block/:userId",
+  authController.protect,
+  userController.unblockUser,
+);
+
 module.exports = router;

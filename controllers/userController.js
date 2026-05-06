@@ -3,6 +3,8 @@ const User = require("../models/user");
 const filterObj = require("../utils/filterObj");
 const catchAsync = require("../utils/catchAsync");
 
+const { blockUser, unblockUser } = require("../services/blockUserService");
+
 exports.updateMe = catchAsync(async (req, res, next) => {
   const { user } = req;
   if (req.body.password || req.body.passwordConfirm) {
@@ -142,5 +144,32 @@ exports.getMe = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: "success",
     data: user,
+  });
+});
+
+exports.blockUser = catchAsync(async (req, res, next) => {
+  const result = await blockUser({
+    userId: req.user._id,
+    targetUserId: req.params.userId,
+  });
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      blockedUserId: result.targetUser._id,
+    },
+    message: "User blocked successfully",
+  });
+});
+
+exports.unblockUser = catchAsync(async (req, res, next) => {
+  await unblockUser({
+    userId: req.user._id,
+    targetUserId: req.params.userId,
+  });
+
+  res.status(200).json({
+    status: "success",
+    message: "User unblocked successfully",
   });
 });

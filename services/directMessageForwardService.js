@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const OneToOneMessage = require("../models/OneToOneMessage");
 const User = require("../models/user");
 
+const { ensureUsersCanDirectMessage } = require("./blockUserService");
+
 const createServiceError = (message, statusCode = 400) => {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -128,6 +130,11 @@ exports.forwardDirectMessage = async ({
     sourceMessage,
     userId,
     targetConversation,
+  });
+
+  await ensureUsersCanDirectMessage({
+    senderId: userId,
+    recipientId: newMessage.to,
   });
 
   targetConversation.messages.push(newMessage);

@@ -28,6 +28,7 @@ const {
 const {
   createTotumAIAutoReply,
 } = require("./services/totumAIAutoReplyService");
+const { ensureUsersCanDirectMessage } = require("./services/blockUserService");
 
 const server = http.createServer(app);
 
@@ -499,6 +500,18 @@ io.on("connection", async (socket) => {
         return;
       }
 
+      try {
+        await ensureUsersCanDirectMessage({
+          senderId: from,
+          recipientId: to,
+        });
+      } catch (error) {
+        io.to(socket.id).emit("message_error", {
+          message: error.message || "You cannot message this user",
+        });
+        return;
+      }
+
       const chat = await OneToOneMessage.findOne({
         _id: conversation_id,
         participants: { $size: 2, $all: [from, to] },
@@ -727,6 +740,18 @@ io.on("connection", async (socket) => {
       if (!to_user || !from_user) {
         io.to(socket.id).emit("message_error", {
           message: "User not found",
+        });
+        return;
+      }
+
+      try {
+        await ensureUsersCanDirectMessage({
+          senderId: from,
+          recipientId: to,
+        });
+      } catch (error) {
+        io.to(socket.id).emit("message_error", {
+          message: error.message || "You cannot message this user",
         });
         return;
       }
