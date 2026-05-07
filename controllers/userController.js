@@ -157,6 +157,7 @@ exports.blockUser = catchAsync(async (req, res, next) => {
     status: "success",
     data: {
       blockedUserId: result.targetUser._id,
+      blockedByMe: true,
     },
     message: "User blocked successfully",
   });
@@ -170,6 +171,10 @@ exports.unblockUser = catchAsync(async (req, res, next) => {
 
   res.status(200).json({
     status: "success",
+    data: {
+      blockedUserId: req.params.userId,
+      blockedByMe: false,
+    },
     message: "User unblocked successfully",
   });
 });

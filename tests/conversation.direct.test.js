@@ -138,4 +138,45 @@ describe("GET /conversation/direct", () => {
     expect(response.body.data).toHaveLength(1);
     expect(response.body.data[0]._id).toBe(visibleConversation._id.toString());
   });
+
+  it("marks direct conversations blocked by the authenticated user", async () => {
+    const userA = await createUser({
+      email: "blocked-direct-a@example.com",
+      firstName: "Blocked",
+      lastName: "A",
+    });
+
+    const userB = await createUser({
+      email: "blocked-direct-b@example.com",
+      firstName: "Blocked",
+      lastName: "B",
+    });
+
+    userA.blockedUsers.push(userB._id);
+    await userA.save({ validateModifiedOnly: true });
+
+    await OneToOneMessage.create({
+      participants: [userA._id, userB._id],
+      messages: [
+        {
+          to: userB._id,
+          from: userA._id,
+          type: "Text",
+          text: "Old message",
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const token = signToken(userA._id);
+
+    const response = await request(app)
+      .get("/conversation/direct")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0].blockedByMe).toBe(true);
+  });
 });

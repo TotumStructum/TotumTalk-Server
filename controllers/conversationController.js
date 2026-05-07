@@ -15,9 +15,30 @@ exports.getDirectConversations = catchAsync(async (req, res, next) => {
     )
     .sort({ updatedAt: -1 });
 
+  const currentUserId = req.user._id.toString();
+
+  const blockedUserIds = new Set(
+    (req.user.blockedUsers || []).map((userId) => userId.toString()),
+  );
+
+  const conversationsWithBlockState = conversations.map((conversation) => {
+    const conversationObject = conversation.toObject();
+
+    const otherParticipant = conversationObject.participants.find(
+      (participant) => participant._id.toString() !== currentUserId,
+    );
+
+    return {
+      ...conversationObject,
+      blockedByMe: otherParticipant
+        ? blockedUserIds.has(otherParticipant._id.toString())
+        : false,
+    };
+  });
+
   return res.status(200).json({
     status: "success",
-    data: conversations,
+    data: conversationsWithBlockState,
   });
 });
 
