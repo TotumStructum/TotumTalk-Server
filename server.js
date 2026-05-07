@@ -603,33 +603,37 @@ io.on("connection", async (socket) => {
     },
   );
 
-  socket.on("group_text_message", async ({ group_id, message, type } = {}) => {
-    try {
-      const result = await createGroupTextMessage({
-        userId: socket.userId,
-        groupId: group_id,
-        message,
-        type,
-      });
-
-      result.recipients.forEach((recipient) => {
-        if (!recipient.socket_id) return;
-
-        io.to(recipient.socket_id).emit("new_group_message", {
-          group_id,
-          message: result.message,
+  socket.on(
+    "group_text_message",
+    async ({ group_id, message, type, reply_to } = {}) => {
+      try {
+        const result = await createGroupTextMessage({
+          userId: socket.userId,
+          groupId: group_id,
+          message,
+          type,
+          replyToMessageId: reply_to,
         });
-      });
-    } catch (error) {
-      io.to(socket.id).emit("message_error", {
-        message: error.message || "Failed to send group message",
-      });
-    }
-  });
+
+        result.recipients.forEach((recipient) => {
+          if (!recipient.socket_id) return;
+
+          io.to(recipient.socket_id).emit("new_group_message", {
+            group_id,
+            message: result.message,
+          });
+        });
+      } catch (error) {
+        io.to(socket.id).emit("message_error", {
+          message: error.message || "Failed to send group message",
+        });
+      }
+    },
+  );
 
   socket.on(
     "group_file_message",
-    async ({ group_id, file, type, text = "" } = {}) => {
+    async ({ group_id, file, type, text = "", reply_to } = {}) => {
       try {
         const result = await createGroupFileMessage({
           userId: socket.userId,
@@ -637,6 +641,7 @@ io.on("connection", async (socket) => {
           file,
           type,
           text,
+          replyToMessageId: reply_to,
         });
 
         result.recipients.forEach((recipient) => {

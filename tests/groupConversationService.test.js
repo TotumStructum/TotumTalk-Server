@@ -161,6 +161,88 @@ describe("createGroupTextMessage", () => {
       }),
     ).rejects.toThrow("Message text cannot be empty");
   });
+
+  it("creates a group reply text message", async () => {
+    const userA = await createUser({
+      email: "group-reply-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "group-reply-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "group-reply-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Reply Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+      messages: [
+        {
+          from: userA._id,
+          type: "Text",
+          text: "Original group message",
+        },
+      ],
+    });
+
+    const originalMessageId = group.messages[0]._id;
+
+    const result = await createGroupTextMessage({
+      userId: userB._id,
+      groupId: group._id,
+      message: "Reply from group member",
+      type: "Text",
+      replyToMessageId: originalMessageId,
+    });
+
+    expect(result.message.text).toBe("Reply from group member");
+    expect(result.message.replyTo.messageId.toString()).toBe(
+      originalMessageId.toString(),
+    );
+    expect(result.message.replyTo.text).toBe("Original group message");
+    expect(result.message.replyTo.type).toBe("Text");
+    expect(result.message.replyTo.from.toString()).toBe(userA._id.toString());
+
+    const updatedGroup = await GroupMessage.findById(group._id);
+
+    expect(updatedGroup.messages).toHaveLength(2);
+    expect(updatedGroup.messages[1].replyTo.text).toBe(
+      "Original group message",
+    );
+  });
+
+  it("rejects replying to a missing group message", async () => {
+    const userA = await createUser({
+      email: "group-missing-reply-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "group-missing-reply-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "group-missing-reply-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Missing Reply Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+    });
+
+    await expect(
+      createGroupTextMessage({
+        userId: userA._id,
+        groupId: group._id,
+        message: "Reply should fail",
+        type: "Text",
+        replyToMessageId: userB._id,
+      }),
+    ).rejects.toThrow("Reply message not found");
+  });
 });
 
 describe("createGroupFileMessage", () => {

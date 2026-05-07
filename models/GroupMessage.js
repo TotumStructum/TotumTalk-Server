@@ -30,6 +30,27 @@ const groupMessageSchema = new mongoose.Schema(
         return ["Media", "Document"].includes(this.type);
       },
     },
+    replyTo: {
+      messageId: {
+        type: mongoose.Schema.ObjectId,
+      },
+      from: {
+        type: mongoose.Schema.ObjectId,
+        ref: "User",
+      },
+      type: {
+        type: String,
+        enum: ["Text", "Media", "Document", "Link"],
+      },
+      text: {
+        type: String,
+        trim: true,
+      },
+      file: {
+        type: String,
+        trim: true,
+      },
+    },
   },
   { _id: true },
 );

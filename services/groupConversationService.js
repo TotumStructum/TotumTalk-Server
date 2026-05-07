@@ -19,7 +19,35 @@ const getSenderAndRecipients = async ({ userId, participants }) => {
   ]);
 };
 
-exports.createGroupTextMessage = async ({ userId, groupId, message, type }) => {
+const buildGroupReplySnapshot = ({ group, replyToMessageId }) => {
+  if (!replyToMessageId) return null;
+
+  if (!mongoose.Types.ObjectId.isValid(replyToMessageId)) {
+    throw createServiceError("Invalid reply message id");
+  }
+
+  const replyMessage = group.messages.id(replyToMessageId);
+
+  if (!replyMessage) {
+    throw createServiceError("Reply message not found", 404);
+  }
+
+  return {
+    messageId: replyMessage._id,
+    from: replyMessage.from,
+    type: replyMessage.type,
+    text: replyMessage.text || "",
+    file: replyMessage.file || "",
+  };
+};
+
+exports.createGroupTextMessage = async ({
+  userId,
+  groupId,
+  message,
+  type,
+  replyToMessageId,
+}) => {
   if (!userId) {
     throw createServiceError("Authenticated user is required", 401);
   }
@@ -51,11 +79,22 @@ exports.createGroupTextMessage = async ({ userId, groupId, message, type }) => {
     throw createServiceError("Group conversation not found", 404);
   }
 
-  group.messages.push({
+  const replyTo = buildGroupReplySnapshot({
+    group,
+    replyToMessageId,
+  });
+
+  const newMessage = {
     from: userId,
     type,
     text: trimmedMessage,
-  });
+  };
+
+  if (replyTo) {
+    newMessage.replyTo = replyTo;
+  }
+
+  group.messages.push(newMessage);
 
   await group.save();
 
@@ -82,6 +121,7 @@ exports.createGroupFileMessage = async ({
   file,
   type,
   text = "",
+  replyToMessageId,
 }) => {
   if (!userId) {
     throw createServiceError("Authenticated user is required", 401);
@@ -121,8 +161,17 @@ exports.createGroupFileMessage = async ({
     file: fileUrl,
   };
 
+  const replyTo = buildGroupReplySnapshot({
+    group,
+    replyToMessageId,
+  });
+
   if (messageText) {
     newMessage.text = messageText;
+  }
+
+  if (replyTo) {
+    newMessage.replyTo = replyTo;
   }
 
   group.messages.push(newMessage);
