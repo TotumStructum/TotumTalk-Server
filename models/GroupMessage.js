@@ -51,6 +51,12 @@ const groupMessageSchema = new mongoose.Schema(
         trim: true,
       },
     },
+    deletedFor: [
+      {
+        type: mongoose.Schema.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   { _id: true },
 );

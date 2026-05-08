@@ -382,9 +382,79 @@ exports.getGroupConversationMessages = catchAsync(async (req, res, next) => {
     });
   }
 
+  const currentUserId = req.user._id.toString();
+
+  const visibleMessages = group.messages.filter((message) => {
+    const deletedFor = Array.isArray(message.deletedFor)
+      ? message.deletedFor
+      : [];
+
+    return !deletedFor.some((userId) => userId.toString() === currentUserId);
+  });
+
   return res.status(200).json({
     status: "success",
-    data: group.messages,
+    data: visibleMessages,
+  });
+});
+
+exports.deleteGroupMessageForMe = catchAsync(async (req, res, next) => {
+  const { groupId, messageId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(groupId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid group conversation id",
+    });
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(messageId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid message id",
+    });
+  }
+
+  const group = await GroupMessage.findOne({
+    _id: groupId,
+    participants: req.user._id,
+  });
+
+  if (!group) {
+    return res.status(404).json({
+      status: "error",
+      message: "Group conversation not found",
+    });
+  }
+
+  const message = group.messages.id(messageId);
+
+  if (!message) {
+    return res.status(404).json({
+      status: "error",
+      message: "Message not found",
+    });
+  }
+
+  const currentUserId = req.user._id.toString();
+
+  const alreadyDeleted = Array.isArray(message.deletedFor)
+    ? message.deletedFor.some((userId) => userId.toString() === currentUserId)
+    : false;
+
+  if (!alreadyDeleted) {
+    message.deletedFor.push(req.user._id);
+  }
+
+  await group.save();
+
+  return res.status(200).json({
+    status: "success",
+    data: {
+      groupId,
+      messageId,
+    },
+    message: "Message deleted for you",
   });
 });
 

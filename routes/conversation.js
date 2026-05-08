@@ -14,6 +14,11 @@ router.get(
 );
 
 router.delete(
+  "/group/:groupId/messages/:messageId",
+  conversationController.deleteGroupMessageForMe,
+);
+
+router.delete(
   "/group/:groupId/leave",
   conversationController.leaveGroupConversation,
 );
