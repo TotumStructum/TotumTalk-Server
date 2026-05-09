@@ -270,4 +270,45 @@ describe("User social endpoints", () => {
     expect(response.body.data[0].recipient).toHaveProperty("avatar");
     expect(response.body.data[0].recipient).toHaveProperty("status");
   });
+
+  it("filters eligible users in GET /user/get-users by search query", async () => {
+    const currentUser = await createUser({
+      email: "search-owner@example.com",
+      firstName: "Search",
+      lastName: "Owner",
+    });
+
+    const matchingUser = await createUser({
+      email: "alice@example.com",
+      firstName: "Alice",
+      lastName: "Cooper",
+    });
+
+    const matchingByLastName = await createUser({
+      email: "another@example.com",
+      firstName: "Robert",
+      lastName: "Aliceberg",
+    });
+
+    const nonMatchingUser = await createUser({
+      email: "bob@example.com",
+      firstName: "Bob",
+      lastName: "Builder",
+    });
+
+    const token = signToken(currentUser._id);
+
+    const response = await request(app)
+      .get("/user/get-users?search=alice")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("success");
+
+    const returnedIds = response.body.data.map((user) => user._id.toString());
+
+    expect(returnedIds).toContain(matchingUser._id.toString());
+    expect(returnedIds).toContain(matchingByLastName._id.toString());
+    expect(returnedIds).not.toContain(nonMatchingUser._id.toString());
+  });
 });

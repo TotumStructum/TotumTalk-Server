@@ -5,6 +5,10 @@ const catchAsync = require("../utils/catchAsync");
 
 const { blockUser, unblockUser } = require("../services/blockUserService");
 
+const escapeRegex = (value) => {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
 exports.updateMe = catchAsync(async (req, res, next) => {
   const { user } = req;
   if (req.body.password || req.body.passwordConfirm) {
@@ -54,6 +58,14 @@ exports.updateMe = catchAsync(async (req, res, next) => {
 exports.getUser = catchAsync(async (req, res, next) => {
   const currentUserId = req.user._id.toString();
 
+  const search =
+    typeof req.query.search === "string" ? req.query.search.trim() : "";
+
+  const requestedLimit = Number.parseInt(req.query.limit, 10);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(requestedLimit, 1), 50)
+    : 20;
+
   const pendingRequests = await FriendRequest.find({
     $or: [{ sender: req.user._id }, { recipient: req.user._id }],
   }).select("sender recipient");
@@ -68,11 +80,32 @@ exports.getUser = catchAsync(async (req, res, next) => {
     excludedUserIds.add(request.recipient.toString());
   });
 
-  const remaining_users = await User.find({
+  const userQuery = {
     verified: true,
     isSystem: { $ne: true },
     _id: { $nin: Array.from(excludedUserIds) },
-  }).select("_id firstName lastName avatar status isAI isSystem");
+  };
+
+  if (search) {
+    const tokens = search.split(/\s+/).filter(Boolean).slice(0, 5);
+
+    userQuery.$and = tokens.map((token) => {
+      const safeToken = escapeRegex(token);
+
+      return {
+        $or: [
+          { firstName: { $regex: safeToken, $options: "i" } },
+          { lastName: { $regex: safeToken, $options: "i" } },
+          { email: { $regex: safeToken, $options: "i" } },
+        ],
+      };
+    });
+  }
+
+  const remaining_users = await User.find(userQuery)
+    .select("_id firstName lastName avatar status isAI isSystem")
+    .sort({ firstName: 1, lastName: 1 })
+    .limit(limit);
 
   res.status(200).json({
     status: "success",
