@@ -2,11 +2,37 @@ const FriendRequest = require("../models/friendRequest");
 const User = require("../models/user");
 const filterObj = require("../utils/filterObj");
 const catchAsync = require("../utils/catchAsync");
-
+const fs = require("fs");
+const path = require("path");
 const { blockUser, unblockUser } = require("../services/blockUserService");
 
 const escapeRegex = (value) => {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+const buildAvatarUrl = (req, filename) => {
+  return `${req.protocol}://${req.get("host")}/uploads/avatars/${filename}`;
+};
+
+const removeLocalAvatarFile = (avatarUrl) => {
+  if (!avatarUrl) return;
+
+  try {
+    const pathname = new URL(avatarUrl, "http://local").pathname;
+
+    if (!pathname.startsWith("/uploads/avatars/")) {
+      return;
+    }
+
+    const filename = path.basename(pathname);
+    const filePath = path.join(__dirname, "..", "uploads", "avatars", filename);
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error) {
+    // Do not block profile update if cleanup fails.
+  }
 };
 
 exports.updateMe = catchAsync(async (req, res, next) => {
@@ -19,13 +45,7 @@ exports.updateMe = catchAsync(async (req, res, next) => {
     });
   }
 
-  const filteredBody = filterObj(
-    req.body,
-    "firstName",
-    "lastName",
-    "about",
-    "avatar",
-  );
+  const filteredBody = filterObj(req.body, "firstName", "lastName", "about");
 
   const update_user = await User.findById(user._id);
 
@@ -52,6 +72,89 @@ exports.updateMe = catchAsync(async (req, res, next) => {
       status: update_user.status,
     },
     message: "Profile updated successfully",
+  });
+});
+
+exports.updateAvatar = catchAsync(async (req, res, next) => {
+  if (!req.file) {
+    return res.status(400).json({
+      status: "error",
+      message: "Please upload an avatar image.",
+    });
+  }
+
+  const updateUser = await User.findById(req.user._id);
+
+  if (!updateUser) {
+    removeLocalAvatarFile(buildAvatarUrl(req, req.file.filename));
+
+    return res.status(404).json({
+      status: "error",
+      message: "User not found",
+    });
+  }
+
+  const previousAvatar = updateUser.avatar;
+  const avatarUrl = buildAvatarUrl(req, req.file.filename);
+
+  updateUser.avatar = avatarUrl;
+
+  await updateUser.save({ validateModifiedOnly: true });
+
+  if (previousAvatar && previousAvatar !== avatarUrl) {
+    removeLocalAvatarFile(previousAvatar);
+  }
+
+  return res.status(200).json({
+    status: "success",
+    message: "Avatar updated successfully",
+    data: {
+      _id: updateUser._id,
+      firstName: updateUser.firstName,
+      lastName: updateUser.lastName,
+      email: updateUser.email,
+      about: updateUser.about,
+      avatar: updateUser.avatar,
+      status: updateUser.status,
+      file: {
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+      },
+    },
+  });
+});
+
+exports.deleteAvatar = catchAsync(async (req, res, next) => {
+  const updateUser = await User.findById(req.user._id);
+
+  if (!updateUser) {
+    return res.status(404).json({
+      status: "error",
+      message: "User not found",
+    });
+  }
+
+  const previousAvatar = updateUser.avatar;
+
+  updateUser.avatar = "";
+
+  await updateUser.save({ validateModifiedOnly: true });
+
+  removeLocalAvatarFile(previousAvatar);
+
+  return res.status(200).json({
+    status: "success",
+    message: "Avatar removed successfully",
+    data: {
+      _id: updateUser._id,
+      firstName: updateUser.firstName,
+      lastName: updateUser.lastName,
+      email: updateUser.email,
+      about: updateUser.about,
+      avatar: updateUser.avatar,
+      status: updateUser.status,
+    },
   });
 });
 

@@ -5,9 +5,11 @@ const catchAsync = require("../utils/catchAsync");
 
 const DOCUMENT_UPLOAD_DIR = path.join(__dirname, "..", "uploads", "documents");
 const MEDIA_UPLOAD_DIR = path.join(__dirname, "..", "uploads", "media");
+const AVATAR_UPLOAD_DIR = path.join(__dirname, "..", "uploads", "avatars");
 
 fs.mkdirSync(DOCUMENT_UPLOAD_DIR, { recursive: true });
 fs.mkdirSync(MEDIA_UPLOAD_DIR, { recursive: true });
+fs.mkdirSync(AVATAR_UPLOAD_DIR, { recursive: true });
 
 const ALLOWED_DOCUMENT_MIME_TYPES = [
   "application/pdf",
@@ -78,8 +80,20 @@ const mediaUpload = multer({
   },
 });
 
+const avatarUpload = multer({
+  storage: createStorage(AVATAR_UPLOAD_DIR),
+  fileFilter: createFileFilter(
+    ALLOWED_MEDIA_MIME_TYPES,
+    "Only JPG, PNG, WEBP and GIF files are allowed for avatar upload.",
+  ),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+});
+
 const uploadDocumentMiddleware = documentUpload.single("file");
 const uploadMediaMiddleware = mediaUpload.single("file");
+const uploadAvatarMiddleware = avatarUpload.single("file");
 
 const uploadDocument = catchAsync(async (req, res) => {
   if (!req.file) {
@@ -134,4 +148,5 @@ module.exports = {
   uploadDocument,
   uploadMediaMiddleware,
   uploadMedia,
+  uploadAvatarMiddleware,
 };
