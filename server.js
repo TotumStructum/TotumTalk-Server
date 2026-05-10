@@ -30,6 +30,33 @@ const {
 } = require("./services/totumAIAutoReplyService");
 const { ensureUsersCanDirectMessage } = require("./services/blockUserService");
 
+const VALID_CALL_TYPES = ["audio", "video"];
+
+const buildCallUserPayload = (user) => ({
+  _id: user._id.toString(),
+  firstName: user.firstName || "",
+  lastName: user.lastName || "",
+  email: user.email || "",
+  avatar: user.avatar || "",
+});
+
+const emitCallError = (socket, message) => {
+  socket.emit("call_error", {
+    message,
+  });
+};
+
+const getCallPeerUsers = async ({ from, to }) => {
+  return Promise.all([
+    User.findById(from).select(
+      "_id firstName lastName email avatar socket_id isAI isSystem",
+    ),
+    User.findById(to).select(
+      "_id firstName lastName email avatar socket_id isAI isSystem",
+    ),
+  ]);
+};
+
 const server = http.createServer(app);
 
 process.on("uncaughtException", (err) => {
@@ -824,6 +851,185 @@ io.on("connection", async (socket) => {
       }
     },
   );
+
+  socket.on(
+    "call_invite",
+    async ({ to, conversation_id, call_id, call_type } = {}) => {
+      const from = socket.userId;
+
+      if (!to || !conversation_id || !call_id || !call_type) {
+        emitCallError(socket, "Missing required call data");
+        return;
+      }
+
+      if (!VALID_CALL_TYPES.includes(call_type)) {
+        emitCallError(socket, "Invalid call type");
+        return;
+      }
+
+      if (!mongoose.Types.ObjectId.isValid(to)) {
+        emitCallError(socket, "Invalid recipient id");
+        return;
+      }
+
+      if (!mongoose.Types.ObjectId.isValid(conversation_id)) {
+        emitCallError(socket, "Invalid conversation id");
+        return;
+      }
+
+      if (to.toString() === from.toString()) {
+        emitCallError(socket, "You cannot call yourself");
+        return;
+      }
+
+      const [from_user, to_user] = await getCallPeerUsers({ from, to });
+
+      if (!from_user || !to_user) {
+        emitCallError(socket, "User not found");
+        return;
+      }
+
+      if (to_user.isSystem || to_user.isAI) {
+        emitCallError(socket, "Calls with system users are not supported");
+        return;
+      }
+
+      try {
+        await ensureUsersCanDirectMessage({
+          senderId: from,
+          recipientId: to,
+        });
+      } catch (error) {
+        emitCallError(socket, error.message || "You cannot call this user");
+        return;
+      }
+
+      const conversation = await OneToOneMessage.findOne({
+        _id: conversation_id,
+        participants: { $size: 2, $all: [from, to] },
+      });
+
+      if (!conversation) {
+        emitCallError(socket, "Conversation not found");
+        return;
+      }
+
+      const payload = {
+        call_id,
+        conversation_id,
+        call_type,
+        from: buildCallUserPayload(from_user),
+        to: buildCallUserPayload(to_user),
+      };
+
+      if (!to_user.socket_id) {
+        socket.emit("call_unavailable", {
+          ...payload,
+          message: "User is offline",
+        });
+        return;
+      }
+
+      io.to(to_user.socket_id).emit("call_incoming", payload);
+      socket.emit("call_ringing", payload);
+    },
+  );
+
+  const relayCallEvent = async ({ eventName, socket, data = {} }) => {
+    const from = socket.userId;
+    const { to, call_id, conversation_id, call_type } = data;
+
+    if (!to || !call_id || !conversation_id || !call_type) {
+      emitCallError(socket, "Missing required call data");
+      return;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(to)) {
+      emitCallError(socket, "Invalid recipient id");
+      return;
+    }
+
+    const [from_user, to_user] = await getCallPeerUsers({ from, to });
+
+    if (!from_user || !to_user) {
+      emitCallError(socket, "User not found");
+      return;
+    }
+
+    if (!to_user.socket_id) {
+      socket.emit("call_unavailable", {
+        call_id,
+        conversation_id,
+        call_type,
+        from: buildCallUserPayload(from_user),
+        to: buildCallUserPayload(to_user),
+        message: "User is offline",
+      });
+      return;
+    }
+
+    io.to(to_user.socket_id).emit(eventName, {
+      ...data,
+      from: buildCallUserPayload(from_user),
+      to: buildCallUserPayload(to_user),
+    });
+  };
+
+  socket.on("call_accept", async (data = {}) => {
+    await relayCallEvent({
+      eventName: "call_accepted",
+      socket,
+      data,
+    });
+  });
+
+  socket.on("call_decline", async (data = {}) => {
+    await relayCallEvent({
+      eventName: "call_declined",
+      socket,
+      data,
+    });
+  });
+
+  socket.on("call_cancel", async (data = {}) => {
+    await relayCallEvent({
+      eventName: "call_cancelled",
+      socket,
+      data,
+    });
+  });
+
+  socket.on("call_end", async (data = {}) => {
+    await relayCallEvent({
+      eventName: "call_ended",
+      socket,
+      data,
+    });
+  });
+
+  socket.on("call_offer", async (data = {}) => {
+    await relayCallEvent({
+      eventName: "call_offer",
+      socket,
+      data,
+    });
+  });
+
+  socket.on("call_answer", async (data = {}) => {
+    await relayCallEvent({
+      eventName: "call_answer",
+      socket,
+      data,
+    });
+  });
+
+  socket.on("ice_candidate", async (data = {}) => {
+    await relayCallEvent({
+      eventName: "ice_candidate",
+      socket,
+      data,
+    });
+  });
 
   socket.on("end", async () => {
     if (socket.userId) {
