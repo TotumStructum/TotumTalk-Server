@@ -68,9 +68,22 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
+const allowedSocketOrigins = (
+  process.env.FRONTEND_ORIGINS || "http://localhost:3001"
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3001",
+    origin: (origin, callback) => {
+      if (!origin || allowedSocketOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by Socket.IO CORS"));
+    },
     methods: ["GET", "POST"],
   },
 });
