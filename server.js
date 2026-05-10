@@ -29,6 +29,10 @@ const {
   createTotumAIAutoReply,
 } = require("./services/totumAIAutoReplyService");
 const { ensureUsersCanDirectMessage } = require("./services/blockUserService");
+const {
+  createCallLog,
+  updateCallLogStatus,
+} = require("./services/callLogService");
 
 const VALID_CALL_TYPES = ["audio", "video"];
 
@@ -70,6 +74,32 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
   },
 });
+
+const emitCallLogUpdate = async (log) => {
+  if (!log) return;
+
+  const [caller, receiver] = await Promise.all([
+    User.findById(log.caller?._id || log.caller).select("socket_id"),
+    User.findById(log.receiver?._id || log.receiver).select("socket_id"),
+  ]);
+
+  [caller?.socket_id, receiver?.socket_id]
+    .filter(Boolean)
+    .forEach((socketId) => {
+      io.to(socketId).emit("call_log_updated", log);
+    });
+};
+
+const updateCallLogAndEmit = async ({ callId, status }) => {
+  const log = await updateCallLogStatus({
+    callId,
+    status,
+  });
+
+  await emitCallLogUpdate(log);
+
+  return log;
+};
 
 const DB = process.env.DBURI.replace("<PASSWORD>", process.env.DBPASSWORD);
 
@@ -922,7 +952,22 @@ io.on("connection", async (socket) => {
         to: buildCallUserPayload(to_user),
       };
 
+      const callLog = await createCallLog({
+        callId: call_id,
+        callerId: from,
+        receiverId: to,
+        conversationId: conversation_id,
+        callType: call_type,
+      });
+
+      await emitCallLogUpdate(callLog);
+
       if (!to_user.socket_id) {
+        await updateCallLogAndEmit({
+          callId: call_id,
+          status: "missed",
+        });
+
         socket.emit("call_unavailable", {
           ...payload,
           message: "User is offline",
@@ -976,6 +1021,11 @@ io.on("connection", async (socket) => {
   };
 
   socket.on("call_accept", async (data = {}) => {
+    await updateCallLogAndEmit({
+      callId: data.call_id,
+      status: "active",
+    });
+
     await relayCallEvent({
       eventName: "call_accepted",
       socket,
@@ -984,6 +1034,11 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("call_decline", async (data = {}) => {
+    await updateCallLogAndEmit({
+      callId: data.call_id,
+      status: "declined",
+    });
+
     await relayCallEvent({
       eventName: "call_declined",
       socket,
@@ -992,6 +1047,11 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("call_cancel", async (data = {}) => {
+    await updateCallLogAndEmit({
+      callId: data.call_id,
+      status: "cancelled",
+    });
+
     await relayCallEvent({
       eventName: "call_cancelled",
       socket,
@@ -1000,6 +1060,11 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("call_end", async (data = {}) => {
+    await updateCallLogAndEmit({
+      callId: data.call_id,
+      status: "completed",
+    });
+
     await relayCallEvent({
       eventName: "call_ended",
       socket,
