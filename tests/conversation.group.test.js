@@ -322,6 +322,113 @@ describe("GET /conversation/group", () => {
   });
 });
 
+describe("PATCH /conversation/group/:groupId/messages/:messageId/star", () => {
+  it("stars and unstars a group message for a participant", async () => {
+    const userA = await createUser({
+      email: "group-star-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "group-star-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "group-star-c@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Star Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+      messages: [
+        {
+          from: userB._id,
+          type: "Text",
+          text: "Important group message",
+        },
+      ],
+    });
+
+    const messageId = group.messages[0]._id;
+    const token = signToken(userA._id);
+
+    const starResponse = await request(app)
+      .patch(`/conversation/group/${group._id}/messages/${messageId}/star`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ starred: true });
+
+    expect(starResponse.statusCode).toBe(200);
+    expect(starResponse.body.status).toBe("success");
+    expect(starResponse.body.message).toBe("Message starred");
+    expect(starResponse.body.data.starredBy).toContain(userA._id.toString());
+
+    let savedGroup = await GroupMessage.findById(group._id);
+    expect(
+      savedGroup.messages[0].starredBy.map((id) => id.toString()),
+    ).toContain(userA._id.toString());
+
+    const unstarResponse = await request(app)
+      .patch(`/conversation/group/${group._id}/messages/${messageId}/star`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ starred: false });
+
+    expect(unstarResponse.statusCode).toBe(200);
+    expect(unstarResponse.body.status).toBe("success");
+    expect(unstarResponse.body.message).toBe("Message unstarred");
+    expect(unstarResponse.body.data.starredBy).not.toContain(
+      userA._id.toString(),
+    );
+
+    savedGroup = await GroupMessage.findById(group._id);
+    expect(
+      savedGroup.messages[0].starredBy.map((id) => id.toString()),
+    ).not.toContain(userA._id.toString());
+  });
+
+  it("does not allow a non-participant to star a group message", async () => {
+    const userA = await createUser({
+      email: "group-star-private-a@example.com",
+    });
+
+    const userB = await createUser({
+      email: "group-star-private-b@example.com",
+    });
+
+    const userC = await createUser({
+      email: "group-star-private-c@example.com",
+    });
+
+    const outsider = await createUser({
+      email: "group-star-outsider@example.com",
+    });
+
+    const group = await GroupMessage.create({
+      title: "Private Star Group",
+      creator: userA._id,
+      participants: [userA._id, userB._id, userC._id],
+      messages: [
+        {
+          from: userA._id,
+          type: "Text",
+          text: "Private group message",
+        },
+      ],
+    });
+
+    const messageId = group.messages[0]._id;
+    const token = signToken(outsider._id);
+
+    const response = await request(app)
+      .patch(`/conversation/group/${group._id}/messages/${messageId}/star`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ starred: true });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body.status).toBe("error");
+    expect(response.body.message).toBe("Group conversation not found");
+  });
+});
+
 describe("DELETE /conversation/group/:groupId/leave", () => {
   it("removes the authenticated user from group participants without deleting messages", async () => {
     const userA = await createUser({

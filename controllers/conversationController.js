@@ -398,6 +398,92 @@ exports.getGroupConversationMessages = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.toggleGroupMessageStar = catchAsync(async (req, res, next) => {
+  const { groupId, messageId } = req.params;
+  const { starred } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(groupId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid group conversation id",
+    });
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(messageId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid message id",
+    });
+  }
+
+  if (typeof starred !== "boolean") {
+    return res.status(400).json({
+      status: "error",
+      message: "Starred value must be boolean",
+    });
+  }
+
+  const group = await GroupMessage.findOne({
+    _id: groupId,
+    participants: req.user._id,
+  });
+
+  if (!group) {
+    return res.status(404).json({
+      status: "error",
+      message: "Group conversation not found",
+    });
+  }
+
+  const message = group.messages.id(messageId);
+
+  if (!message) {
+    return res.status(404).json({
+      status: "error",
+      message: "Message not found",
+    });
+  }
+
+  const currentUserId = req.user._id.toString();
+
+  const isDeletedForCurrentUser = Array.isArray(message.deletedFor)
+    ? message.deletedFor.some((userId) => userId.toString() === currentUserId)
+    : false;
+
+  if (isDeletedForCurrentUser) {
+    return res.status(404).json({
+      status: "error",
+      message: "Message not found",
+    });
+  }
+
+  if (!Array.isArray(message.starredBy)) {
+    message.starredBy = [];
+  }
+
+  const alreadyStarred = message.starredBy.some(
+    (userId) => userId.toString() === currentUserId,
+  );
+
+  if (starred && !alreadyStarred) {
+    message.starredBy.push(req.user._id);
+  }
+
+  if (!starred && alreadyStarred) {
+    message.starredBy = message.starredBy.filter(
+      (userId) => userId.toString() !== currentUserId,
+    );
+  }
+
+  await group.save();
+
+  return res.status(200).json({
+    status: "success",
+    data: message,
+    message: starred ? "Message starred" : "Message unstarred",
+  });
+});
+
 exports.deleteGroupMessageForMe = catchAsync(async (req, res, next) => {
   const { groupId, messageId } = req.params;
 
@@ -445,6 +531,10 @@ exports.deleteGroupMessageForMe = catchAsync(async (req, res, next) => {
   if (!alreadyDeleted) {
     message.deletedFor.push(req.user._id);
   }
+
+  message.starredBy = Array.isArray(message.starredBy)
+    ? message.starredBy.filter((userId) => userId.toString() !== currentUserId)
+    : [];
 
   await group.save();
 

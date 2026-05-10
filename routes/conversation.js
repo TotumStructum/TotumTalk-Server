@@ -13,6 +13,11 @@ router.get(
   conversationController.getGroupConversationMessages,
 );
 
+router.patch(
+  "/group/:groupId/messages/:messageId/star",
+  conversationController.toggleGroupMessageStar,
+);
+
 router.delete(
   "/group/:groupId/messages/:messageId",
   conversationController.deleteGroupMessageForMe,
